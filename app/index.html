@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Santa 2025 Solution Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --bg-panel: #141414;
+            --bg-control: #1f1f1f;
+            --accent: #ffd700;
+            --accent-hover: #ffed4a;
+            --text: #f0f0f0;
+            --text-muted: #888888;
+            --success: #4ecdc4;
+            --warning: #ffd700;
+            --tree-fill: #2e8b57;
+            --tree-selected: #4da6ff;
+            --tree-collision: #ff4444;
+            --boundary: #ff6b6b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-panel);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn {
+            background: var(--bg-control);
+            border: 1px solid var(--accent);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: var(--accent);
+            color: #000;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #000;
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            color: #000;
+        }
+
+        /* Main layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background: var(--bg-panel);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            border-right: 1px solid var(--accent);
+        }
+
+        .panel {
+            background: var(--bg-control);
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid #333;
+        }
+
+        .panel h3 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Config selector */
+        .config-selector {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .config-selector input {
+            width: 80px;
+            background: var(--bg-dark);
+            border: 1px solid var(--accent);
+            color: var(--text);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        .config-selector input:focus {
+            outline: none;
+            border-color: var(--success);
+            box-shadow: 0 0 10px rgba(78, 205, 196, 0.3);
+        }
+
+        /* Score display */
+        .score-display {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .score-item {
+            background: var(--bg-dark);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .score-item label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .score-item .value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--success);
+        }
+
+        .score-item.total .value {
+            color: var(--warning);
+        }
+
+        /* Tree info */
+        .tree-info {
+            font-size: 0.85rem;
+        }
+
+        .tree-info p {
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .tree-info span {
+            color: var(--text-muted);
+        }
+
+        /* Rotation slider */
+        .rotation-control {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .rotation-control input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .rotation-value {
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--success);
+        }
+
+        /* Canvas container */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0d0d1a 100%);
+            overflow: hidden;
+        }
+
+        #treeCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: grab;
+        }
+
+        #treeCanvas.grabbing {
+            cursor: grabbing;
+        }
+
+        #treeCanvas.dragging-tree {
+            cursor: move;
+        }
+
+        /* Status bar */
+        .status-bar {
+            background: var(--bg-panel);
+            padding: 8px 20px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid rgba(233, 69, 96, 0.3);
+        }
+
+        /* Help panel */
+        .help-panel {
+            font-size: 0.75rem;
+            line-height: 1.6;
+        }
+
+        .help-panel kbd {
+            background: var(--bg-dark);
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid var(--text-muted);
+            font-family: monospace;
+        }
+
+        /* File input hidden */
+        #fileInput {
+            display: none;
+        }
+
+        /* Undo/Redo buttons */
+        .undo-redo {
+            display: flex;
+            gap: 8px;
+        }
+
+        .undo-redo .btn {
+            padding: 8px 12px;
+        }
+
+        .undo-redo .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Boundary indicator */
+        .boundary-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .boundary-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--boundary);
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 60px;
+            right: 20px;
+            background: var(--bg-control);
+            padding: 12px 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--success);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.error {
+            border-left-color: var(--accent);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Zoom controls */
+        .zoom-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .zoom-controls .btn {
+            padding: 6px 12px;
+            font-size: 1rem;
+        }
+
+        .zoom-level {
+            font-size: 0.85rem;
+            min-width: 50px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+<div class="header">
+    <h1>🎄 Santa 2025 Solution Editor</h1>
+    <div class="header-controls">
+        <input accept=".csv" id="fileInput" type="file">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">📂 Load Solution</button>
+        <button class="btn" onclick="reloadCSV()">🔄 Reload Solution</button>
+        <button class="btn btn-primary" onclick="saveCSV()">💾 Save Solution</button>
+        <button class="btn" onclick="saveConfig()">📄 Save Config</button>
+        <button class="btn" onclick="resetConfig()">⟲ Reset Config</button>
+        <div class="undo-redo">
+            <button class="btn" disabled id="undoBtn" onclick="undo()">↩ Undo</button>
+            <button class="btn" disabled id="redoBtn" onclick="redo()">↪ Redo</button>
+        </div>
+    </div>
+</div>
+
+<div class="main-container">
+    <div class="sidebar">
+        <div class="panel">
+            <h3>Configuration</h3>
+            <div class="config-selector">
+                <span>N =</span>
+                <input id="configN" max="200" min="1" onchange="loadConfig(this.value)" type="number" value="1">
+                <button class="btn" onclick="prevConfig()">◀</button>
+                <button class="btn" onclick="nextConfig()">▶</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Score</h3>
+            <div class="score-display">
+                <div class="score-item">
+                    <label>Config S²/N</label>
+                    <div class="value" id="configScore">-</div>
+                </div>
+                <div class="score-item">
+                    <label>Side</label>
+                    <div class="value" id="sideLength">-</div>
+                </div>
+                <div class="score-item">
+                    <label>Original</label>
+                    <div class="value" id="originalScore" style="color: #a0a0a0;">-</div>
+                </div>
+                <div class="score-item">
+                    <label>Delta</label>
+                    <div class="value" id="scoreDelta">-</div>
+                </div>
+                <div class="score-item total" style="grid-column: span 2;">
+                    <label>Total Score (All Configs)</label>
+                    <div class="value" id="totalScore">-</div>
+                </div>
+            </div>
+            <h3 style="margin-top: 12px;">Δ vs N-1 / N+1</h3>
+            <div class="score-display" style="font-size: 0.85rem;">
+                <div class="score-item">
+                    <label>S²/N vs N-1</label>
+                    <div class="value" id="deltaN1Score" style="font-size: 0.95rem;">-</div>
+                </div>
+                <div class="score-item">
+                    <label>Side vs N-1</label>
+                    <div class="value" id="deltaN1Side" style="font-size: 0.95rem;">-</div>
+                </div>
+                <div class="score-item">
+                    <label>S²/N vs N+1</label>
+                    <div class="value" id="deltaN2Score" style="font-size: 0.95rem;">-</div>
+                </div>
+                <div class="score-item">
+                    <label>Side vs N+1</label>
+                    <div class="value" id="deltaN2Side" style="font-size: 0.95rem;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Selected Tree</h3>
+            <div class="tree-info" id="treeInfo">
+                <p><span>No tree selected</span></p>
+            </div>
+            <div class="rotation-control" id="rotationControl" style="display: none;">
+                <label>Rotation (°)</label>
+                <input id="rotationSlider" max="180" min="-180" oninput="updateRotation(this.value)" type="range"
+                       value="0">
+                <div class="rotation-value" id="rotationValue">0°</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>View Controls</h3>
+            <div class="zoom-controls">
+                <button class="btn" onclick="zoomIn()">+</button>
+                <span class="zoom-level" id="zoomLevel">100%</span>
+                <button class="btn" onclick="zoomOut()">−</button>
+                <button class="btn" onclick="resetView()">⟲ Reset</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Keyboard Shortcuts</h3>
+            <div class="help-panel">
+                <p><kbd>[</kbd> <kbd>]</kbd> Rotate selected tree</p>
+                <p><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Fine move</p>
+                <p><kbd>PageUp</kbd><kbd>PageDown</kbd> Prev/Next config</p>
+                <p><kbd>Scroll</kbd> Zoom in/out</p>
+                <p><kbd>Drag canvas</kbd> Pan view</p>
+                <p><kbd>Ctrl+Z</kbd> Undo</p>
+                <p><kbd>Ctrl+Y</kbd> Redo</p>
+                <p><kbd>Esc</kbd> Deselect tree</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Legend</h3>
+            <div class="help-panel">
+                <p><span style="color: #3cb371;">■</span> Normal tree</p>
+                <p><span style="color: #4da6ff;">■</span> Selected tree</p>
+                <p><span style="color: #ff6b6b;">■</span> Boundary tree</p>
+                <p><span style="color: #ffd700;">■</span> <b>Side-defining</b> (limits score)</p>
+                <p><span style="color: #ff4444;">■</span> Collision preview</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="treeCanvas"></canvas>
+    </div>
+</div>
+
+<div class="status-bar">
+    <span id="statusText">Load a CSV file to begin</span>
+    <span id="mousePosition">X: -, Y: -</span>
+</div>
+
+<script>
+    // ============================================
+    // Tree Geometry (from collision.cu)
+    // ============================================
+    const TREE_TEMPLATE = [
+        [0.0, 0.8],
+        [0.125, 0.5],
+        [0.0625, 0.5],
+        [0.2, 0.25],
+        [0.1, 0.25],
+        [0.35, 0.0],
+        [0.075, 0.0],
+        [0.075, -0.2],
+        [-0.075, -0.2],
+        [-0.075, 0.0],
+        [-0.35, 0.0],
+        [-0.1, 0.25],
+        [-0.2, 0.25],
+        [-0.0625, 0.5],
+        [-0.125, 0.5]
+    ];
+
+    // ============================================
+    // State
+    // ============================================
+    let allConfigs = {}; // { n: [{x, y, deg}, ...], ... }
+    let originalConfigs = {}; // Original data for reset functionality
+    let originalScores = {}; // Original S²/N scores for delta comparison
+    let lastLoadedFile = null; // Track the last loaded file for reload
+    let currentN = 1;
+    let selectedTreeIdx = -1;
+    let trees = []; // Current config's trees
+    let boundaryTreeIndices = new Set();
+    let boundaryEdgeInfo = {}; // { treeIdx: { left, right, top, bottom, definesSide } }
+
+    // View state
+    let viewX = 0, viewY = 0;
+    let zoom = 100; // pixels per unit
+    let isDraggingCanvas = false;
+    let isDraggingTree = false;
+    let dragStartX = 0, dragStartY = 0;
+    let dragStartTreeX = 0, dragStartTreeY = 0;
+    let previewX = 0, previewY = 0;
+    let isPreviewValid = true;
+
+    // Undo/Redo
+    const MAX_UNDO = 50;
+    let undoStack = [];
+    let redoStack = [];
+
+    // Canvas
+    const canvas = document.getElementById('treeCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ============================================
+    // Initialization
+    // ============================================
+    function init() {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // File input
+        document.getElementById('fileInput').addEventListener('change', handleFileLoad);
+
+        // Canvas events
+        canvas.addEventListener('mousedown', onMouseDown);
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('mouseleave', onMouseUp);
+        canvas.addEventListener('wheel', onWheel, {passive: false});
+
+        // Keyboard
+        document.addEventListener('keydown', onKeyDown);
+
+        render();
+    }
+
+    function resizeCanvas() {
+        const container = canvas.parentElement;
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+
+        // Center view if no data
+        if (Object.keys(allConfigs).length === 0) {
+            viewX = canvas.width / 2;
+            viewY = canvas.height / 2;
+        }
+
+        render();
+    }
+
+    // ============================================
+    // File I/O
+    // ============================================
+    function handleFileLoad(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        lastLoadedFile = file;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            parseCSV(event.target.result, true);
+            showToast(`Loaded ${file.name}`);
+        };
+        reader.readAsText(file);
+    }
+
+    function reloadCSV() {
+        if (!lastLoadedFile) {
+            showToast('No file loaded yet', true);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            parseCSV(event.target.result, true);
+            showToast(`Reloaded ${lastLoadedFile.name}`);
+        };
+        reader.readAsText(lastLoadedFile);
+    }
+
+    function resetConfig() {
+        if (!originalConfigs[currentN]) {
+            showToast('No original data for this config', true);
+            return;
+        }
+
+        pushUndo();
+        allConfigs[currentN] = originalConfigs[currentN].map(t => ({...t}));
+        trees = allConfigs[currentN].map(t => ({...t}));
+
+        selectedTreeIdx = -1;
+        updateTreeInfo();
+        findBoundaryTrees();
+        updateScoreDisplay();
+        updateTotalScore();
+        render();
+
+        showToast(`Reset N=${currentN} to original`);
+    }
+
+    function parseCSV(text, saveAsOriginal = false) {
+        const lines = text.trim().split('\n');
+        const header = lines[0];
+
+        allConfigs = {};
+
+        for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(',');
+            if (parts.length < 4) continue;
+
+            const id = parts[0].trim();
+            const [nStr, tStr] = id.split('_');
+            const n = parseInt(nStr);
+            const treeIdx = parseInt(tStr);
+
+            // Remove 's' prefix
+            const x = parseFloat(parts[1].replace('s', ''));
+            const y = parseFloat(parts[2].replace('s', ''));
+            const deg = parseFloat(parts[3].replace('s', ''));
+
+            if (!allConfigs[n]) allConfigs[n] = [];
+            allConfigs[n][treeIdx] = {x, y, deg};
+        }
+
+        // Fill any gaps with nulls removed
+        for (const n in allConfigs) {
+            allConfigs[n] = allConfigs[n].filter(t => t !== undefined);
+        }
+
+        // Save original state for reset functionality
+        if (saveAsOriginal) {
+            originalConfigs = {};
+            originalScores = {};
+            for (const n in allConfigs) {
+                originalConfigs[n] = allConfigs[n].map(t => ({...t}));
+                // Compute original score for delta comparison
+                const configTrees = allConfigs[n];
+                if (configTrees.length > 0) {
+                    let minX = Infinity, maxX = -Infinity;
+                    let minY = Infinity, maxY = -Infinity;
+                    for (const tree of configTrees) {
+                        const aabb = getAABB(tree);
+                        minX = Math.min(minX, aabb.minX);
+                        maxX = Math.max(maxX, aabb.maxX);
+                        minY = Math.min(minY, aabb.minY);
+                        maxY = Math.max(maxY, aabb.maxY);
+                    }
+                    const side = Math.max(maxX - minX, maxY - minY);
+                    originalScores[n] = (side * side) / configTrees.length;
+                }
+            }
+        }
+
+        // Clear undo/redo stacks on fresh load
+        undoStack = [];
+        redoStack = [];
+        updateUndoRedoButtons();
+
+        loadConfig(currentN);
+        updateTotalScore();
+        setStatus(`Loaded ${Object.keys(allConfigs).length} configurations`);
+    }
+
+    function saveCSV() {
+        if (Object.keys(allConfigs).length === 0) {
+            showToast('No data to save', true);
+            return;
+        }
+
+        let csv = 'id,x,y,deg\n';
+
+        for (let n = 1; n <= 200; n++) {
+            if (!allConfigs[n]) continue;
+            for (let t = 0; t < allConfigs[n].length; t++) {
+                const tree = allConfigs[n][t];
+                const id = `${String(n).padStart(3, '0')}_${t}`;
+                csv += `${id},s${tree.x.toFixed(15)},s${tree.y.toFixed(15)},s${tree.deg.toFixed(15)}\n`;
+            }
+        }
+
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'edited_submission.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast('Saved edited_submission.csv');
+    }
+
+    function saveConfig() {
+        if (!allConfigs[currentN] || allConfigs[currentN].length === 0) {
+            showToast(`No data for config N=${currentN}`, true);
+            return;
+        }
+
+        let csv = 'id,x,y,deg\n';
+
+        for (let t = 0; t < allConfigs[currentN].length; t++) {
+            const tree = allConfigs[currentN][t];
+            const id = `${String(currentN).padStart(3, '0')}_${t}`;
+            csv += `${id},s${tree.x.toFixed(15)},s${tree.y.toFixed(15)},s${tree.deg.toFixed(15)}\n`;
+        }
+
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `config_${String(currentN).padStart(3, '0')}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast(`Saved config_${String(currentN).padStart(3, '0')}.csv`);
+    }
+
+    // ============================================
+    // Configuration Loading
+    // ============================================
+    function loadConfig(n) {
+        n = parseInt(n);
+        if (n < 1 || n > 200) return;
+
+        currentN = n;
+        document.getElementById('configN').value = n;
+
+        if (!allConfigs[n]) {
+            trees = [];
+            setStatus(`No data for N=${n}`);
+        } else {
+            trees = allConfigs[n].map(t => ({...t}));
+        }
+
+        selectedTreeIdx = -1;
+        updateTreeInfo();
+        findBoundaryTrees();
+        updateScoreDisplay();
+        centerView();
+        render();
+    }
+
+    function prevConfig() {
+        if (currentN > 1) loadConfig(currentN - 1);
+    }
+
+    function nextConfig() {
+        if (currentN < 200) loadConfig(currentN + 1);
+    }
+
+    // ============================================
+    // Tree Geometry Helpers
+    // ============================================
+    function getTransformedVertices(tree) {
+        const rad = tree.deg * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        return TREE_TEMPLATE.map(([vx, vy]) => ({
+            x: vx * cos - vy * sin + tree.x,
+            y: vx * sin + vy * cos + tree.y
+        }));
+    }
+
+    function getAABB(tree) {
+        const verts = getTransformedVertices(tree);
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        for (const v of verts) {
+            minX = Math.min(minX, v.x);
+            maxX = Math.max(maxX, v.x);
+            minY = Math.min(minY, v.y);
+            maxY = Math.max(maxY, v.y);
+        }
+
+        return {minX, maxX, minY, maxY};
+    }
+
+    function getBoundingBox() {
+        if (trees.length === 0) return null;
+
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        for (const tree of trees) {
+            const aabb = getAABB(tree);
+            minX = Math.min(minX, aabb.minX);
+            maxX = Math.max(maxX, aabb.maxX);
+            minY = Math.min(minY, aabb.minY);
+            maxY = Math.max(maxY, aabb.maxY);
+        }
+
+        const side = Math.max(maxX - minX, maxY - minY);
+        return {minX, maxX, minY, maxY, side};
+    }
+
+    function findBoundaryTrees() {
+        boundaryTreeIndices.clear();
+        boundaryEdgeInfo = {};
+        if (trees.length === 0) return;
+
+        const bbox = getBoundingBox();
+        const eps = 0.001;
+        const width = bbox.maxX - bbox.minX;
+        const height = bbox.maxY - bbox.minY;
+        const isWidthDefining = width >= height; // Which dimension defines the side
+
+        for (let i = 0; i < trees.length; i++) {
+            const aabb = getAABB(trees[i]);
+            const touchesLeft = Math.abs(aabb.minX - bbox.minX) < eps;
+            const touchesRight = Math.abs(aabb.maxX - bbox.maxX) < eps;
+            const touchesBottom = Math.abs(aabb.minY - bbox.minY) < eps;
+            const touchesTop = Math.abs(aabb.maxY - bbox.maxY) < eps;
+
+            if (touchesLeft || touchesRight || touchesBottom || touchesTop) {
+                boundaryTreeIndices.add(i);
+                // Does this tree define the side?
+                // Side-defining means it's on the larger dimension
+                const definesSide = (isWidthDefining && (touchesLeft || touchesRight)) ||
+                    (!isWidthDefining && (touchesTop || touchesBottom));
+                boundaryEdgeInfo[i] = {
+                    left: touchesLeft,
+                    right: touchesRight,
+                    top: touchesTop,
+                    bottom: touchesBottom,
+                    definesSide
+                };
+            }
+        }
+    }
+
+    // ============================================
+    // Collision Detection (port from collision.cu)
+    // ============================================
+    function segmentsIntersect(p1, p2, q1, q2) {
+        const d = (p2.x - p1.x) * (q2.y - q1.y) - (p2.y - p1.y) * (q2.x - q1.x);
+        if (Math.abs(d) < 1e-12) return false;
+
+        const t = ((q1.x - p1.x) * (q2.y - q1.y) - (q1.y - p1.y) * (q2.x - q1.x)) / d;
+        const u = ((q1.x - p1.x) * (p2.y - p1.y) - (q1.y - p1.y) * (p2.x - p1.x)) / d;
+
+        const eps = 1e-9;
+        return t > eps && t < 1 - eps && u > eps && u < 1 - eps;
+    }
+
+    function pointInPolygon(pt, verts) {
+        let wn = 0;
+        const n = verts.length;
+
+        for (let i = 0; i < n; i++) {
+            const v1 = verts[i];
+            const v2 = verts[(i + 1) % n];
+
+            if (v1.y <= pt.y) {
+                if (v2.y > pt.y) {
+                    if ((v2.x - v1.x) * (pt.y - v1.y) - (v2.y - v1.y) * (pt.x - v1.x) > 0) wn++;
+                }
+            } else {
+                if (v2.y <= pt.y) {
+                    if ((v2.x - v1.x) * (pt.y - v1.y) - (v2.y - v1.y) * (pt.x - v1.x) < 0) wn--;
+                }
+            }
+        }
+
+        return wn !== 0;
+    }
+
+    function treesOverlap(tree1, tree2) {
+        // AABB check
+        const aabb1 = getAABB(tree1);
+        const aabb2 = getAABB(tree2);
+
+        if (aabb1.maxX < aabb2.minX || aabb1.minX > aabb2.maxX ||
+            aabb1.maxY < aabb2.minY || aabb1.minY > aabb2.maxY) {
+            return false;
+        }
+
+        // Edge intersection
+        const verts1 = getTransformedVertices(tree1);
+        const verts2 = getTransformedVertices(tree2);
+
+        for (let i = 0; i < verts1.length; i++) {
+            const a1 = verts1[i];
+            const a2 = verts1[(i + 1) % verts1.length];
+
+            for (let j = 0; j < verts2.length; j++) {
+                const b1 = verts2[j];
+                const b2 = verts2[(j + 1) % verts2.length];
+
+                if (segmentsIntersect(a1, a2, b1, b2)) return true;
+            }
+        }
+
+        // Point containment
+        if (pointInPolygon(verts1[0], verts2)) return true;
+        if (pointInPolygon(verts2[0], verts1)) return true;
+
+        return false;
+    }
+
+    function checkCollision(treeIdx, newX, newY, newDeg) {
+        const testTree = {x: newX, y: newY, deg: newDeg};
+
+        for (let i = 0; i < trees.length; i++) {
+            if (i === treeIdx) continue;
+            if (treesOverlap(testTree, trees[i])) return true;
+        }
+
+        return false;
+    }
+
+    // ============================================
+    // Scoring
+    // ============================================
+    function computeConfigScore() {
+        if (trees.length === 0) return {score: 0, side: 0};
+
+        const bbox = getBoundingBox();
+        const score = (bbox.side * bbox.side) / trees.length;
+
+        return {score, side: bbox.side};
+    }
+
+    function computeConfigScoreForN(n) {
+        const configTrees = allConfigs[n];
+        if (!configTrees || configTrees.length === 0) return null;
+
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        for (const tree of configTrees) {
+            const aabb = getAABB(tree);
+            minX = Math.min(minX, aabb.minX);
+            maxX = Math.max(maxX, aabb.maxX);
+            minY = Math.min(minY, aabb.minY);
+            maxY = Math.max(maxY, aabb.maxY);
+        }
+
+        const side = Math.max(maxX - minX, maxY - minY);
+        const score = (side * side) / configTrees.length;
+        return {score, side};
+    }
+
+    function formatDeltaPercent(current, other, elementId) {
+        const el = document.getElementById(elementId);
+        if (other === null || other === 0) {
+            el.textContent = '-';
+            el.style.color = '#a0a0a0';
+            return;
+        }
+        const deltaPercent = ((current - other) / other) * 100;
+        if (Math.abs(deltaPercent) < 0.01) {
+            el.textContent = '0%';
+            el.style.color = '#a0a0a0';
+        } else if (deltaPercent < 0) {
+            el.textContent = deltaPercent.toFixed(1) + '%';
+            el.style.color = '#4ecdc4'; // Green - current is smaller (better)
+        } else {
+            el.textContent = '+' + deltaPercent.toFixed(1) + '%';
+            el.style.color = '#ff6b6b'; // Red - current is larger (worse)
+        }
+    }
+
+    function updateScoreDisplay() {
+        const {score, side} = computeConfigScore();
+        document.getElementById('configScore').textContent = score.toFixed(6);
+        document.getElementById('sideLength').textContent = side.toFixed(6);
+
+        // Show original score and delta
+        if (originalScores[currentN] !== undefined) {
+            const origScore = originalScores[currentN];
+            document.getElementById('originalScore').textContent = origScore.toFixed(6);
+            const delta = score - origScore;
+            const deltaEl = document.getElementById('scoreDelta');
+            if (Math.abs(delta) < 1e-10) {
+                deltaEl.textContent = '0';
+                deltaEl.style.color = '#a0a0a0';
+            } else if (delta < 0) {
+                deltaEl.textContent = delta.toFixed(6);
+                deltaEl.style.color = '#4ecdc4'; // Green - improvement
+            } else {
+                deltaEl.textContent = '+' + delta.toFixed(6);
+                deltaEl.style.color = '#ff6b6b'; // Red - worse
+            }
+        } else {
+            document.getElementById('originalScore').textContent = '-';
+            document.getElementById('scoreDelta').textContent = '-';
+        }
+
+        // Compute delta percentages vs N-1 and N+1
+        const nMinus1 = currentN - 1;
+        const nPlus1 = currentN + 1;
+
+        const scoreNMinus1 = (nMinus1 >= 1) ? computeConfigScoreForN(nMinus1) : null;
+        const scoreNPlus1 = (nPlus1 <= 200) ? computeConfigScoreForN(nPlus1) : null;
+
+        // Delta vs N-1
+        if (scoreNMinus1) {
+            formatDeltaPercent(score, scoreNMinus1.score, 'deltaN1Score');
+            formatDeltaPercent(side, scoreNMinus1.side, 'deltaN1Side');
+        } else {
+            document.getElementById('deltaN1Score').textContent = '-';
+            document.getElementById('deltaN1Score').style.color = '#a0a0a0';
+            document.getElementById('deltaN1Side').textContent = '-';
+            document.getElementById('deltaN1Side').style.color = '#a0a0a0';
+        }
+
+        // Delta vs N+1
+        if (scoreNPlus1) {
+            formatDeltaPercent(score, scoreNPlus1.score, 'deltaN2Score');
+            formatDeltaPercent(side, scoreNPlus1.side, 'deltaN2Side');
+        } else {
+            document.getElementById('deltaN2Score').textContent = '-';
+            document.getElementById('deltaN2Score').style.color = '#a0a0a0';
+            document.getElementById('deltaN2Side').textContent = '-';
+            document.getElementById('deltaN2Side').style.color = '#a0a0a0';
+        }
+    }
+
+    function updateTotalScore() {
+        let total = 0;
+
+        for (const n in allConfigs) {
+            const configTrees = allConfigs[n];
+            if (configTrees.length === 0) continue;
+
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            for (const tree of configTrees) {
+                const aabb = getAABB(tree);
+                minX = Math.min(minX, aabb.minX);
+                maxX = Math.max(maxX, aabb.maxX);
+                minY = Math.min(minY, aabb.minY);
+                maxY = Math.max(maxY, aabb.maxY);
+            }
+
+            const side = Math.max(maxX - minX, maxY - minY);
+            total += (side * side) / configTrees.length;
+        }
+
+        document.getElementById('totalScore').textContent = total.toFixed(6);
+    }
+
+    // ============================================
+    // View Controls
+    // ============================================
+    function worldToScreen(x, y) {
+        return {
+            x: viewX + x * zoom,
+            y: viewY - y * zoom // Flip Y for screen coordinates
+        };
+    }
+
+    function screenToWorld(sx, sy) {
+        return {
+            x: (sx - viewX) / zoom,
+            y: -(sy - viewY) / zoom // Flip Y back
+        };
+    }
+
+    function centerView() {
+        if (trees.length === 0) {
+            viewX = canvas.width / 2;
+            viewY = canvas.height / 2;
+            return;
+        }
+
+        const bbox = getBoundingBox();
+        const centerX = (bbox.minX + bbox.maxX) / 2;
+        const centerY = (bbox.minY + bbox.maxY) / 2;
+
+        // Fit to view with padding
+        const worldWidth = bbox.maxX - bbox.minX + 1;
+        const worldHeight = bbox.maxY - bbox.minY + 1;
+        const maxDim = Math.max(worldWidth, worldHeight);
+
+        zoom = Math.min(canvas.width, canvas.height) / maxDim * 0.8;
+        zoom = Math.max(20, Math.min(500, zoom));
+
+        viewX = canvas.width / 2 - centerX * zoom;
+        viewY = canvas.height / 2 + centerY * zoom;
+
+        updateZoomDisplay();
+    }
+
+    function zoomIn() {
+        zoom = Math.min(zoom * 1.25, 500);
+        updateZoomDisplay();
+        render();
+    }
+
+    function zoomOut() {
+        zoom = Math.max(zoom / 1.25, 20);
+        updateZoomDisplay();
+        render();
+    }
+
+    function resetView() {
+        centerView();
+        render();
+    }
+
+    function updateZoomDisplay() {
+        document.getElementById('zoomLevel').textContent = Math.round(zoom) + '%';
+    }
+
+    // ============================================
+    // Mouse Handling
+    // ============================================
+    function onMouseDown(e) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const world = screenToWorld(sx, sy);
+
+        // Check if clicking on a tree
+        let clickedTree = -1;
+        for (let i = trees.length - 1; i >= 0; i--) {
+            const verts = getTransformedVertices(trees[i]);
+            if (pointInPolygon(world, verts)) {
+                clickedTree = i;
+                break;
+            }
+        }
+
+        if (clickedTree >= 0) {
+            selectedTreeIdx = clickedTree;
+            isDraggingTree = true;
+            dragStartX = sx;
+            dragStartY = sy;
+            dragStartTreeX = trees[clickedTree].x;
+            dragStartTreeY = trees[clickedTree].y;
+            previewX = dragStartTreeX;
+            previewY = dragStartTreeY;
+            isPreviewValid = true;
+            canvas.classList.add('dragging-tree');
+            updateTreeInfo();
+            render();
+        } else {
+            // Pan canvas
+            isDraggingCanvas = true;
+            dragStartX = sx;
+            dragStartY = sy;
+            canvas.classList.add('grabbing');
+        }
+    }
+
+    function onMouseMove(e) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const world = screenToWorld(sx, sy);
+
+        document.getElementById('mousePosition').textContent =
+            `X: ${world.x.toFixed(3)}, Y: ${world.y.toFixed(3)}`;
+
+        if (isDraggingCanvas) {
+            const dx = sx - dragStartX;
+            const dy = sy - dragStartY;
+            viewX += dx;
+            viewY += dy;
+            dragStartX = sx;
+            dragStartY = sy;
+            render();
+        } else if (isDraggingTree && selectedTreeIdx >= 0) {
+            const dx = (sx - dragStartX) / zoom;
+            const dy = -(sy - dragStartY) / zoom;
+            previewX = dragStartTreeX + dx;
+            previewY = dragStartTreeY + dy;
+
+            // Check collision
+            isPreviewValid = !checkCollision(selectedTreeIdx, previewX, previewY, trees[selectedTreeIdx].deg);
+
+            // Temporarily update tree position for live boundary preview
+            if (isPreviewValid) {
+                const oldX = trees[selectedTreeIdx].x;
+                const oldY = trees[selectedTreeIdx].y;
+                trees[selectedTreeIdx].x = previewX;
+                trees[selectedTreeIdx].y = previewY;
+                findBoundaryTrees();
+                trees[selectedTreeIdx].x = oldX;
+                trees[selectedTreeIdx].y = oldY;
+            }
+
+            render();
+        }
+    }
+
+    function onMouseUp(e) {
+        if (isDraggingTree && selectedTreeIdx >= 0 && isPreviewValid) {
+            const oldX = trees[selectedTreeIdx].x;
+            const oldY = trees[selectedTreeIdx].y;
+
+            if (previewX !== oldX || previewY !== oldY) {
+                pushUndo();
+                trees[selectedTreeIdx].x = previewX;
+                trees[selectedTreeIdx].y = previewY;
+                allConfigs[currentN][selectedTreeIdx] = {...trees[selectedTreeIdx]};
+                findBoundaryTrees();
+                updateScoreDisplay();
+                updateTotalScore();
+                updateTreeInfo();
+            }
+        }
+
+        isDraggingCanvas = false;
+        isDraggingTree = false;
+        canvas.classList.remove('grabbing', 'dragging-tree');
+        render();
+    }
+
+    function onWheel(e) {
+        e.preventDefault();
+
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+
+        const worldBefore = screenToWorld(sx, sy);
+
+        if (e.deltaY < 0) {
+            zoom = Math.min(zoom * 1.1, 500);
+        } else {
+            zoom = Math.max(zoom / 1.1, 20);
+        }
+
+        // Keep the point under cursor stable
+        const worldAfter = screenToWorld(sx, sy);
+        viewX += (worldAfter.x - worldBefore.x) * zoom;
+        viewY -= (worldAfter.y - worldBefore.y) * zoom;
+
+        updateZoomDisplay();
+        render();
+    }
+
+    // ============================================
+    // Keyboard Handling
+    // ============================================
+    function onKeyDown(e) {
+        if (e.target.tagName === 'INPUT') return;
+
+        const step = 0.01;
+        const rotStep = 1;
+
+        switch (e.key) {
+            case '[':
+                if (selectedTreeIdx >= 0) rotateSelectedTree(-rotStep);
+                break;
+            case ']':
+                if (selectedTreeIdx >= 0) rotateSelectedTree(rotStep);
+                break;
+            case 'ArrowUp':
+                if (selectedTreeIdx >= 0) moveSelectedTree(0, step);
+                e.preventDefault();
+                break;
+            case 'ArrowDown':
+                if (selectedTreeIdx >= 0) moveSelectedTree(0, -step);
+                e.preventDefault();
+                break;
+            case 'ArrowLeft':
+                if (selectedTreeIdx >= 0) moveSelectedTree(-step, 0);
+                e.preventDefault();
+                break;
+            case 'ArrowRight':
+                if (selectedTreeIdx >= 0) moveSelectedTree(step, 0);
+                e.preventDefault();
+                break;
+            case 'Escape':
+                selectedTreeIdx = -1;
+                updateTreeInfo();
+                render();
+                break;
+            case 'z':
+                if (e.ctrlKey || e.metaKey) {
+                    undo();
+                    e.preventDefault();
+                }
+                break;
+            case 'y':
+                if (e.ctrlKey || e.metaKey) {
+                    redo();
+                    e.preventDefault();
+                }
+                break;
+            case 'PageUp':
+                prevConfig();
+                e.preventDefault();
+                break;
+            case 'PageDown':
+                nextConfig();
+                e.preventDefault();
+                break;
+        }
+    }
+
+    function moveSelectedTree(dx, dy) {
+        if (selectedTreeIdx < 0) return;
+
+        const tree = trees[selectedTreeIdx];
+        const newX = tree.x + dx;
+        const newY = tree.y + dy;
+
+        if (!checkCollision(selectedTreeIdx, newX, newY, tree.deg)) {
+            pushUndo();
+            tree.x = newX;
+            tree.y = newY;
+            allConfigs[currentN][selectedTreeIdx] = {...tree};
+            findBoundaryTrees();
+            updateScoreDisplay();
+            updateTotalScore();
+            updateTreeInfo();
+            render();
+        }
+    }
+
+    function rotateSelectedTree(dDeg) {
+        if (selectedTreeIdx < 0) return;
+
+        const tree = trees[selectedTreeIdx];
+        const newDeg = tree.deg + dDeg;
+
+        if (!checkCollision(selectedTreeIdx, tree.x, tree.y, newDeg)) {
+            pushUndo();
+            tree.deg = newDeg;
+            allConfigs[currentN][selectedTreeIdx] = {...tree};
+            findBoundaryTrees();
+            updateScoreDisplay();
+            updateTotalScore();
+            updateTreeInfo();
+            render();
+        }
+    }
+
+    function updateRotation(value) {
+        if (selectedTreeIdx < 0) return;
+
+        const newDeg = parseFloat(value);
+        document.getElementById('rotationValue').textContent = newDeg.toFixed(1) + '°';
+
+        if (!checkCollision(selectedTreeIdx, trees[selectedTreeIdx].x, trees[selectedTreeIdx].y, newDeg)) {
+            pushUndo();
+            trees[selectedTreeIdx].deg = newDeg;
+            allConfigs[currentN][selectedTreeIdx] = {...trees[selectedTreeIdx]};
+            findBoundaryTrees();
+            updateScoreDisplay();
+            updateTotalScore();
+            render();
+        }
+    }
+
+    // ============================================
+    // UI Updates
+    // ============================================
+    function updateTreeInfo() {
+        const infoDiv = document.getElementById('treeInfo');
+        const rotControl = document.getElementById('rotationControl');
+
+        if (selectedTreeIdx < 0) {
+            infoDiv.innerHTML = '<p><span>No tree selected</span></p>';
+            rotControl.style.display = 'none';
+            return;
+        }
+
+        const tree = trees[selectedTreeIdx];
+        const isBoundary = boundaryTreeIndices.has(selectedTreeIdx);
+
+        infoDiv.innerHTML = `
+                <p>Index: <span>${selectedTreeIdx}</span></p>
+                <p>X: <span>${tree.x.toFixed(4)}</span></p>
+                <p>Y: <span>${tree.y.toFixed(4)}</span></p>
+                <p>Rotation: <span>${tree.deg.toFixed(1)}°</span></p>
+                ${isBoundary ? '<p class="boundary-indicator"><span class="boundary-dot"></span> Boundary tree</p>' : ''}
+            `;
+
+        rotControl.style.display = 'block';
+        document.getElementById('rotationSlider').value = tree.deg;
+        document.getElementById('rotationValue').textContent = tree.deg.toFixed(1) + '°';
+    }
+
+    function setStatus(text) {
+        document.getElementById('statusText').textContent = text;
+    }
+
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = 'toast' + (isError ? ' error' : '');
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ============================================
+    // Undo/Redo
+    // ============================================
+    function pushUndo() {
+        undoStack.push(JSON.stringify(allConfigs));
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        redoStack = [];
+        updateUndoRedoButtons();
+    }
+
+    function undo() {
+        if (undoStack.length === 0) return;
+
+        redoStack.push(JSON.stringify(allConfigs));
+        allConfigs = JSON.parse(undoStack.pop());
+        trees = allConfigs[currentN] ? allConfigs[currentN].map(t => ({...t})) : [];
+        findBoundaryTrees();
+        updateScoreDisplay();
+        updateTotalScore();
+        updateTreeInfo();
+        updateUndoRedoButtons();
+        render();
+    }
+
+    function redo() {
+        if (redoStack.length === 0) return;
+
+        undoStack.push(JSON.stringify(allConfigs));
+        allConfigs = JSON.parse(redoStack.pop());
+        trees = allConfigs[currentN] ? allConfigs[currentN].map(t => ({...t})) : [];
+        findBoundaryTrees();
+        updateScoreDisplay();
+        updateTotalScore();
+        updateTreeInfo();
+        updateUndoRedoButtons();
+        render();
+    }
+
+    function updateUndoRedoButtons() {
+        document.getElementById('undoBtn').disabled = undoStack.length === 0;
+        document.getElementById('redoBtn').disabled = redoStack.length === 0;
+    }
+
+    // ============================================
+    // Rendering
+    // ============================================
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw grid
+        drawGrid();
+
+        // Draw bounding box
+        drawBoundingBox();
+
+        // Draw trees
+        for (let i = 0; i < trees.length; i++) {
+            if (i === selectedTreeIdx && isDraggingTree) continue;
+            drawTree(i, trees[i]);
+        }
+
+        // Draw dragged tree preview
+        if (isDraggingTree && selectedTreeIdx >= 0) {
+            const previewTree = {x: previewX, y: previewY, deg: trees[selectedTreeIdx].deg};
+            drawTreePreview(previewTree, isPreviewValid);
+        }
+    }
+
+    function drawGrid() {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+
+        const gridSize = 0.5;
+        const screenGridSize = gridSize * zoom;
+
+        if (screenGridSize < 10) return; // Too zoomed out for grid
+
+        const startWorld = screenToWorld(0, canvas.height);
+        const endWorld = screenToWorld(canvas.width, 0);
+
+        const startX = Math.floor(startWorld.x / gridSize) * gridSize;
+        const startY = Math.floor(startWorld.y / gridSize) * gridSize;
+
+        ctx.beginPath();
+        for (let x = startX; x <= endWorld.x; x += gridSize) {
+            const screen = worldToScreen(x, 0);
+            ctx.moveTo(screen.x, 0);
+            ctx.lineTo(screen.x, canvas.height);
+        }
+        for (let y = startY; y <= endWorld.y; y += gridSize) {
+            const screen = worldToScreen(0, y);
+            ctx.moveTo(0, screen.y);
+            ctx.lineTo(canvas.width, screen.y);
+        }
+        ctx.stroke();
+
+        // Draw axes
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const origin = worldToScreen(0, 0);
+        ctx.moveTo(origin.x, 0);
+        ctx.lineTo(origin.x, canvas.height);
+        ctx.moveTo(0, origin.y);
+        ctx.lineTo(canvas.width, origin.y);
+        ctx.stroke();
+    }
+
+    function drawBoundingBox() {
+        if (trees.length === 0) return;
+
+        const bbox = getBoundingBox();
+        const cx = (bbox.minX + bbox.maxX) / 2;
+        const cy = (bbox.minY + bbox.maxY) / 2;
+
+        const topLeft = worldToScreen(cx - bbox.side / 2, cy + bbox.side / 2);
+        const bottomRight = worldToScreen(cx + bbox.side / 2, cy - bbox.side / 2);
+
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+        ctx.setLineDash([]);
+    }
+
+    function drawTree(idx, tree) {
+        const verts = getTransformedVertices(tree);
+        const screenVerts = verts.map(v => worldToScreen(v.x, v.y));
+
+        ctx.beginPath();
+        ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
+        for (let i = 1; i < screenVerts.length; i++) {
+            ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
+        }
+        ctx.closePath();
+
+        // Fill color based on state
+        if (idx === selectedTreeIdx) {
+            ctx.fillStyle = 'rgba(77, 166, 255, 0.6)';
+            ctx.strokeStyle = '#4da6ff';
+            ctx.lineWidth = 2;
+        } else if (boundaryTreeIndices.has(idx)) {
+            const edge = boundaryEdgeInfo[idx];
+            if (edge.definesSide) {
+                // THE tree(s) that define the bounding square side - bright yellow
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.7)'; // Gold/Yellow
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = 3;
+            } else {
+                // Other boundary trees - all red
+                ctx.fillStyle = 'rgba(255, 107, 107, 0.4)';
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 1.5;
+            }
+        } else {
+            ctx.fillStyle = 'rgba(46, 139, 87, 0.5)';
+            ctx.strokeStyle = '#3cb371';
+            ctx.lineWidth = 1;
+        }
+
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw tree index
+        const center = worldToScreen(tree.x, tree.y);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(idx.toString(), center.x, center.y);
+    }
+
+    function drawTreePreview(tree, valid) {
+        const verts = getTransformedVertices(tree);
+        const screenVerts = verts.map(v => worldToScreen(v.x, v.y));
+
+        ctx.beginPath();
+        ctx.moveTo(screenVerts[0].x, screenVerts[0].y);
+        for (let i = 1; i < screenVerts.length; i++) {
+            ctx.lineTo(screenVerts[i].x, screenVerts[i].y);
+        }
+        ctx.closePath();
+
+        if (valid) {
+            ctx.fillStyle = 'rgba(77, 166, 255, 0.7)';
+            ctx.strokeStyle = '#4da6ff';
+        } else {
+            ctx.fillStyle = 'rgba(255, 68, 68, 0.5)';
+            ctx.strokeStyle = '#ff4444';
+        }
+
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw index
+        const center = worldToScreen(tree.x, tree.y);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(selectedTreeIdx.toString(), center.x, center.y);
+    }
+
+    // Start the app
+    init();
+</script>
+</body>
+
+</html>

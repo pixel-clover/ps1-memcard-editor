@@ -29,9 +29,9 @@ jobs:
       - name: Copy App Files
         run: |
           mkdir ./site
-          cp -r ./app/* ./site/
+          cp -a ./app/. ./site/
 
-      - name: Upload Santa 2025 Solution Editor App
+      - name: Upload App
         uses: actions/upload-pages-artifact@v3
         with:
           path: './site'

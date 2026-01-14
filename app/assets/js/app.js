@@ -44,26 +44,88 @@ function toggleTheme() {
     if (saved) document.body.setAttribute('data-theme', saved);
 })();
 
+// --- Audio System ---
+const SoundManager = {
+    sounds: {},
+    init() {
+        // Preload sounds - USER must provide these files in app/assets/audio/
+        const audioFiles = ['boot', 'hover', 'click', 'save', 'delete', 'error'];
+        audioFiles.forEach(name => {
+            this.sounds[name] = new Audio(`assets/audio/${name}.wav`);
+            this.sounds[name].volume = 0.4;
+        });
+    },
+    play(name) {
+        if (this.sounds[name]) {
+            this.sounds[name].currentTime = 0;
+            this.sounds[name].play().catch(e => console.warn('Audio play failed:', e));
+        }
+    }
+};
+
+// Initialize Audio on first interaction to bypass browser policies
+document.body.addEventListener('click', () => {
+    if (!SoundManager.hasInit) {
+        SoundManager.init();
+        SoundManager.hasInit = true;
+    }
+}, {once: true});
+
+
+// --- Custom Modal Logic ---
+let alertCallback = null;
+
+function showCustomAlert(msg, title = "ALERT") {
+    SoundManager.play('error');
+    document.getElementById('alertTitle').innerText = title;
+    document.getElementById('alertMessage').innerText = msg;
+    document.getElementById('alertOkBtn').style.display = 'inline-block';
+    document.getElementById('alertCancelBtn').style.display = 'none';
+    document.getElementById('alertModal').classList.add('active');
+    return new Promise(resolve => {
+        alertCallback = resolve;
+    });
+}
+
+function showCustomConfirm(msg, title = "CONFIRM") {
+    SoundManager.play('click');
+    document.getElementById('alertTitle').innerText = title;
+    document.getElementById('alertMessage').innerText = msg;
+    document.getElementById('alertOkBtn').style.display = 'inline-block';
+    document.getElementById('alertCancelBtn').style.display = 'inline-block';
+    document.getElementById('alertModal').classList.add('active');
+    return new Promise(resolve => {
+        alertCallback = resolve;
+    });
+}
+
+function closeAlert(result) {
+    SoundManager.play('click');
+    document.getElementById('alertModal').classList.remove('active');
+    if (alertCallback) {
+        alertCallback(result);
+        alertCallback = null;
+    }
+}
+
 // --- Help Modal Logic ---
 function toggleHelp() {
+    SoundManager.play('click');
     const modal = document.getElementById('helpModal');
     modal.classList.toggle('active');
 }
 
-function handleModalClick(e) {
-    // Close if clicked on overlay (outside content)
-    if (e.target.id === 'helpModal') {
-        toggleHelp();
+function handleModalClick(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        event.target.classList.remove('active');
+        SoundManager.play('click');
     }
 }
 
 // Close on Escape key
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-        const modal = document.getElementById('helpModal');
-        if (modal.classList.contains('active')) {
-            toggleHelp();
-        }
+        document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
     }
 });
 
@@ -75,8 +137,17 @@ async function loadFile(input, cardIndex) {
 async function handleGlobalDrop(e) {
     e.preventDefault();
     dropOverlay.classList.remove('active');
+
     if (e.dataTransfer.files.length > 0) {
-        await processFile(e.dataTransfer.files[0], 0);
+        const file = e.dataTransfer.files[0];
+
+        // Check if user dropped an MCS file globally (common mistake)
+        if (file.name.toLowerCase().endsWith('.mcs')) {
+            await showCustomAlert("To import a single save (.mcs), drop it directly onto a SLOT, not the background.", "IMPORT ERROR");
+            return;
+        }
+
+        await processFile(file, 0);
         if (e.dataTransfer.files.length > 1) await processFile(e.dataTransfer.files[1], 1);
     }
 }
@@ -84,20 +155,24 @@ async function handleGlobalDrop(e) {
 async function processFile(file, cardIndex) {
     const buf = await file.arrayBuffer();
     if (buf.byteLength < CARD_SIZE) {
-        alert("File too small to be a memory card.");
+        await showCustomAlert("File too small to be a memory card.", "LOAD ERROR");
         return;
     }
 
     cards[cardIndex].data = new Uint8Array(buf.slice(0, CARD_SIZE));
     cards[cardIndex].name = file.name;
+    SoundManager.play('boot');
 
     document.getElementById(`status-${cardIndex}`).innerText = file.name;
     document.getElementById(`dl-${cardIndex}`).disabled = false;
     renderSlots(cardIndex);
 }
 
-function createNewCard(cardIndex) {
-    if (cards[cardIndex].data && !confirm("Discard this card?")) return;
+async function createNewCard(cardIndex) {
+    if (cards[cardIndex].data) {
+        const confirmDiscard = await showCustomConfirm("Discard current card data and create a new empty card?", "CREATE NEW CARD");
+        if (!confirmDiscard) return;
+    }
 
     const data = new Uint8Array(CARD_SIZE);
     data[0] = 77;
@@ -185,7 +260,7 @@ function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
     const destTargets = findFreeSlots(destCardIdx, sourceSlots.length);
 
     if (!destTargets) {
-        alert(`Not enough free blocks! Need ${sourceSlots.length} blocks.`);
+        showCustomAlert(`Not enough free blocks! Need ${sourceSlots.length} blocks.`, "COPY ERROR");
         return;
     }
 
@@ -242,12 +317,29 @@ function handleDragStart(e, cardIdx, slotIdx) {
     e.dataTransfer.effectAllowed = "copy";
 }
 
-function handleSlotDrop(e, destCardIdx, destSlotIdx) {
+async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
     e.preventDefault();
+
+    // Check for External File Drop (Import .mcs)
+    if (e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (!file.name.toLowerCase().endsWith('.mcs')) {
+            await showCustomAlert("Only .mcs files can be imported into slots.", "IMPORT ERROR");
+            return;
+        }
+
+        const buf = await file.arrayBuffer();
+        const mcsData = new Uint8Array(buf);
+        await importMcsData(mcsData, destCardIdx, destSlotIdx);
+        return;
+    }
+
+    // Handle Internal Save Move
     if (!draggedSlot) return;
 
     copySave(draggedSlot.cardIndex, draggedSlot.slotIndex, destCardIdx, destSlotIdx);
     draggedSlot = null;
+    SoundManager.play('save');
 }
 
 // --- Rendering ---
@@ -325,13 +417,13 @@ function renderSlots(cardIndex) {
             </div>
             <div class="slot-actions">
                 <button class="psx-btn" onclick="exportSave(${cardIndex}, ${i})" title="Export .mcs">
-                    <img src="images/psx/b.png" alt="Export">
+                    <img src="assets/images/psx/b.png" alt="Export">
                 </button>
                 <button class="psx-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs (overwrite)">
-                    <img src="images/psx/y.png" alt="Import">
+                    <img src="assets/images/psx/y.png" alt="Import">
                 </button>
                 <button class="psx-btn" onclick="deleteSave(${cardIndex}, ${i})" title="Delete">
-                    <img src="images/psx/a.png" alt="Delete">
+                    <img src="assets/images/psx/a.png" alt="Delete">
                 </button>
             </div>
         `;
@@ -346,9 +438,9 @@ function renderSlots(cardIndex) {
                 <div class="game-title" style="opacity:0.5">Empty</div>
             </div>
             <div class="slot-actions">
-                ${hasData ? `<button class="recover-btn" onclick="undeleteSave(${cardIndex}, ${i})" title="Recover deleted save">↩ RECOVER</button>` : ''}
+                ${hasData ? `<button class="recover-btn" onclick="undeleteSave(${cardIndex}, ${i})" title="Recover deleted save">RECOVER</button>` : ''}
                 <button class="psx-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs">
-                    <img src="images/psx/y.png" alt="Import">
+                    <img src="assets/images/psx/y.png" alt="Import">
                 </button>
             </div>
         `;
@@ -419,13 +511,21 @@ function drawIcon(data, slotIndex, canvas) {
     ctx.putImageData(imgData, 0, 0);
 }
 
-function deleteSave(cardIndex, slotIndex) {
-    if (!confirm("Delete save?")) return;
+async function deleteSave(cardIndex, slotIndex) {
+    const confirmDelete = await showCustomConfirm("Permanently Delete Save?", "DELETE SAVE");
+    if (!confirmDelete) return;
+
     const data = cards[cardIndex].data;
     const off = DIR_FRAME_OFFSET + (slotIndex * 128);
+
+    // FIX: Only mark directory entry as Free (0xA0). DO NOT wipe data block.
+    // This allows "Undelete" to work correctly.
     data[off] = 0xA0; // Free
-    for (let k = 0; k < 64; k++) data[((slotIndex + 1) * BLOCK_SIZE) + 4 + k] = 0;
+
+    // Update checksum for the modified directory entry
     updateChecksum(data, off);
+
+    SoundManager.play('delete');
     renderSlots(cardIndex);
 }
 
@@ -501,6 +601,8 @@ function undeleteSave(cardIndex, slotIndex) {
     // Set status back to Active (0x51)
     data[entryOffset] = 0x51;
     updateChecksum(data, entryOffset);
+
+    SoundManager.play('save'); // Play save sound for recovery
     renderSlots(cardIndex);
 }
 
@@ -521,16 +623,22 @@ async function handleImport(input) {
 
     // Validate .mcs file size (128-byte header + 8KB data)
     if (mcsData.length < 128 + BLOCK_SIZE) {
-        alert('Invalid .mcs file: too small');
+        await showCustomAlert('Invalid .mcs file: too small', "IMPORT ERROR");
         input.value = '';
         return;
     }
 
     const {cardIndex, slotIndex} = importTarget;
+    // Direct call support for drag & drop import
+    await importMcsData(mcsData, cardIndex, slotIndex);
+    input.value = '';
+}
+
+// Refactored Import Logic to be shared
+async function importMcsData(mcsData, cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) {
-        alert('No card loaded');
-        input.value = '';
+        await showCustomAlert('No card loaded', "ERROR");
         return;
     }
 
@@ -548,7 +656,7 @@ async function handleImport(input) {
     // Recalculate checksum
     updateChecksum(data, entryOffset);
 
-    input.value = '';
+    SoundManager.play('save'); // Play success sound
     renderSlots(cardIndex);
 }
 
@@ -556,15 +664,18 @@ async function handleImport(input) {
 // --- Advanced Features ---
 
 // Format card (wipe all saves)
-function formatCard(cardIndex) {
+async function formatCard(cardIndex) {
     if (!cards[cardIndex].data) {
-        alert('No card loaded');
+        await showCustomAlert('No card loaded', "ERROR");
         return;
     }
 
-    if (!confirm('⚠️ FORMAT CARD?\n\nThis will DELETE ALL SAVES on this memory card.\nThis action cannot be undone!')) {
-        return;
-    }
+    const confirmFormat = await showCustomConfirm(
+        'FORMAT CARD?\n\nThis will DELETE ALL SAVES on this memory card.\nThis action cannot be undone!',
+        'DANGER ZONE'
+    );
+
+    if (!confirmFormat) return;
 
     const data = cards[cardIndex].data;
 
@@ -590,6 +701,7 @@ function formatCard(cardIndex) {
         }
     }
 
+    SoundManager.play('delete'); // Play big delete sound
     renderSlots(cardIndex);
 }
 

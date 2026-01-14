@@ -3,104 +3,72 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Procedural Hex Map Generator</title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>PlayStation 1 Memory Card Editor</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 
 <body>
-    <div id="app">
-        <div id="controls">
-            <h1>Hex Map Generator</h1>
 
-            <div class="control-group">
-                <label>View Mode</label>
-                <select id="viewMode">
-                    <option value="terrain">Terrain</option>
-                    <option value="elev">Elevation</option>
-                    <option value="temp">Temperature</option>
-                    <option value="humid">Humidity</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label for="seedInput">Seed</label>
-                <input type="number" id="seedInput" value="5">
-            </div>
-
-            <div class="control-group">
-                <label for="seaLevelInput">Sea Level</label>
-                <input type="range" id="seaLevelInput" min="0.1" max="0.9" step="0.01" value="0.44">
-            </div>
-
-            <div class="control-group">
-                <label for="tempInput">Global Temp</label>
-                <input type="range" id="tempInput" min="-0.5" max="0.5" step="0.01" value="0.0">
-            </div>
-
-            <div class="control-group">
-                <label for="humidInput">Global Humidity</label>
-                <input type="range" id="humidInput" min="-0.5" max="0.5" step="0.01" value="0.0">
-            </div>
-
-            <div class="control-group">
-                <label>Dimensions</label>
-                <div style="display:flex; gap:5px;">
-                    <input type="number" id="rowsInput" value="200" style="width:50%">
-                    <input type="number" id="colsInput" value="300" style="width:50%">
-                </div>
-            </div>
-
-            <button id="generateBtn">Generate Map</button>
-            <div id="statusMsg" class="status">Ready</div>
-
-            <div class="control-group" style="margin-top:20px; border-top:1px solid #333; padding-top:10px;">
-                <label style="color: var(--accent-color); font-weight:600;">Edit Mode</label>
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <input type="checkbox" id="editModeToggle">
-                    <label for="editModeToggle" style="margin:0;">Enable Brush</label>
-                </div>
-            </div>
-
-            <div id="brushControls" style="display:none; flex-direction:column; gap:10px; margin-bottom:10px;">
-                <div class="control-group">
-                    <label>Brush Type</label>
-                    <select id="brushType">
-                        <option value="grass">Grass</option>
-                        <option value="water">Water</option>
-                        <option value="deep_water">Deep Water</option>
-                        <option value="mountains">Mountains</option>
-                        <option value="snow">Snow</option>
-                        <option value="desert">Desert (Sand)</option>
-                        <option value="forest">Forest</option>
-                        <option value="jungle">Jungle</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label>Brush Size</label>
-                    <input type="range" id="brushSize" min="0" max="2" value="0">
-                </div>
-            </div>
-
-            <div class="control-group" style="margin-top:20px; border-top:1px solid #333; padding-top:10px;">
-                <label>Export</label>
-                <div style="display:flex; gap:5px;">
-                    <button id="exportPngBtn" style="margin-top:0; font-size:0.8rem;">Save PNG</button>
-                    <button id="exportJsonBtn" style="margin-top:0; font-size:0.8rem;">Save JSON</button>
-                </div>
-            </div>
+    <div class="header">
+        <div class="header-left">
+            <h1>💾 PlayStation 1 Memory Card Editor</h1>
+            <div class="subtitle">Dual-Pane Editor • Drag Saves to Copy between Cards</div>
         </div>
-
-        <div id="mapContainer">
-            <canvas id="mapCanvas"></canvas>
+        <div class="header-right">
+            <button class="theme-btn" onclick="toggleTheme()" title="Toggle Theme">🌗</button>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script type="module" src="js/main.js"></script>
+    <div class="workspace">
+        <!-- Card A -->
+        <div class="card-pane" id="pane-0">
+            <div class="pane-header">
+                <div class="pane-title">MEMORY CARD 1</div>
+                <div class="pane-controls">
+                    <button class="sm-btn" onclick="createNewCard(0)">New</button>
+                    <label class="sm-btn file-btn">Load <input type="file" onchange="loadFile(this, 0)"
+                            accept=".mcr,.bin,.gme,.mcd,.srm"></label>
+                    <button class="sm-btn btn-outline" onclick="downloadCard(0)" id="dl-0" disabled>Save</button>
+                    <button class="sm-btn btn-danger" onclick="formatCard(0)" title="Format Card">Format</button>
+                </div>
+            </div>
+            <div class="file-status" id="status-0">No Card Loaded</div>
+            <div class="grid" id="grid-0"></div>
+        </div>
+
+        <!-- Card B -->
+        <div class="card-pane" id="pane-1">
+            <div class="pane-header">
+                <div class="pane-title">MEMORY CARD 2</div>
+                <div class="pane-controls">
+                    <button class="sm-btn" onclick="createNewCard(1)">New</button>
+                    <label class="sm-btn file-btn">Load <input type="file" onchange="loadFile(this, 1)"
+                            accept=".mcr,.bin,.gme,.mcd,.srm"></label>
+                    <button class="sm-btn btn-outline" onclick="downloadCard(1)" id="dl-1" disabled>Save</button>
+                    <button class="sm-btn btn-danger" onclick="formatCard(1)" title="Format Card">Format</button>
+                </div>
+            </div>
+            <div class="file-status" id="status-1">No Card Loaded</div>
+            <div class="grid" id="grid-1"></div>
+        </div>
+    </div>
+
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-msg">Drop Memory Card File</div>
+    </div>
+
+    <!-- Hidden import input -->
+    <input type="file" class="import-input" id="importInput" accept=".mcs,.psx" onchange="handleImport(this)">
+
+    <script src="js/app.js"></script>
 </body>
 
 </html>

@@ -1,7 +1,7 @@
 [project]
 name = "game-app"
 version = "0.1.0"
-description = "The Python environment for the Santa 2025 solution editor app"
+description = "A simple web-based PS1 memory card manager"
 
 requires-python = ">=3.10,<4.0"
 dependencies = [

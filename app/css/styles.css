@@ -1,0 +1,444 @@
+:root {
+    /* Default Dark Theme - Softer, easier on the eyes */
+    --bg-color: #1e2028;
+    --card-bg: #282a36;
+    --text-main: #c8cdd8;
+    --text-muted: #6b7280;
+    --accent: #6b9eff;
+    --danger: #ef6b73;
+    --success: #78c97c;
+    --border: #3a3d48;
+    --btn-text: #1e2028;
+}
+
+[data-theme="light"] {
+    --bg-color: #f5f6f8;
+    --card-bg: #ffffff;
+    --text-main: #374151;
+    --text-muted: #9ca3af;
+    --accent: #4a7fd9;
+    --danger: #dc4955;
+    --success: #4caf50;
+    --border: #e5e7eb;
+    --btn-text: #ffffff;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+h1 {
+    margin: 0;
+    color: var(--text-main);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-size: 1.5em;
+}
+
+.subtitle {
+    font-size: 0.85em;
+    opacity: 0.6;
+    margin: 0;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 1400px;
+    margin-bottom: 25px;
+    padding: 15px 20px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.theme-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.2em;
+    transition: all 0.2s;
+}
+
+.theme-btn:hover {
+    background: var(--accent);
+    color: var(--btn-text);
+    border-color: var(--accent);
+    transform: scale(1.05);
+}
+
+button,
+.file-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+    background: var(--card-bg);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+button:hover,
+.file-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    border-color: var(--accent);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.btn-danger {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.btn-danger:hover {
+    background: var(--danger);
+    color: white;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+/* Dual-Pane Layout */
+.workspace {
+    display: flex;
+    gap: 30px;
+    width: 100%;
+    max-width: 1400px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.card-pane {
+    flex: 1;
+    min-width: 450px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+}
+
+.pane-title {
+    font-size: 1.2em;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+}
+
+.pane-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.file-status {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.slot-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.slot-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.slot-card.empty {
+    opacity: 0.5;
+    border-style: dashed;
+}
+
+.slot-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.icon-canvas {
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    background: #000;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.psx-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+}
+
+.psx-btn img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.psx-btn:hover {
+    transform: scale(1.15);
+    filter: brightness(1.2);
+}
+
+.psx-btn:active {
+    transform: scale(0.95);
+}
+
+.slot-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.slot-id {
+    font-size: 0.7em;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.game-title {
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 2px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.game-code {
+    font-size: 0.7em;
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-muted);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.drop-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(122, 162, 247, 0.15);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 4px dashed var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.drop-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.drop-msg {
+    font-size: 2em;
+    color: var(--accent);
+    font-weight: 800;
+    background: var(--card-bg);
+    padding: 30px 60px;
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.modal {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 0 5px;
+}
+
+.modal-close:hover {
+    color: var(--danger);
+}
+
+
+/* Small action buttons for slots */
+.slot-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.action-btn {
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border: none;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7em;
+    color: var(--text-muted);
+    transition: all 0.15s;
+}
+
+.action-btn:hover {
+    background: var(--accent);
+    color: var(--btn-text);
+}
+
+.action-btn.danger:hover {
+    background: var(--danger);
+}
+
+.action-btn.success:hover {
+    background: var(--success);
+}
+
+/* Recover button for empty slots */
+.recover-btn {
+    font-size: 0.7em;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px dashed var(--success);
+    color: var(--success);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.recover-btn:hover {
+    background: var(--success);
+    color: var(--btn-text);
+    border-style: solid;
+}
+
+/* Import input */
+.import-input {
+    display: none;
+}

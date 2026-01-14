@@ -1,22 +1,25 @@
-## Santa 2025 Solution Editor App
+# WebMemCard - PS1 Save Manager
 
-This is a simple web app for editing solutions for the
-[Santa 2025 - Christmas Tree Packing Challenge](https://www.kaggle.com/competitions/santa-2025/overview) Kaggle competition.
+WebMemCard is a lightweight, web-based tool for managing PlayStation 1 (PS1) memory card files. It runs entirely in your browser or can be hosted locally.
 
-> [!NOTE]
-> Report any issues or feature requests in the [Issues](https://github.com/habedi/santa-2025-solution-editor/issues) section.
+## Features
 
+- **Format Support**: Supports standard `.mcr`, `.bin`, and `.srm` (RetroArch) memory card files.
+- **Save Management**:
+    - View all 15 memory card slots.
+    - Correctly decodes **Shift-JIS** game titles.
+    - Renders save **Icons** (pixel art) directly from the save data.
+    - **Delete** unwanted saves to free up slots.
+- **Export**: Download your modified memory card file.
 
-### Getting Started
+## Getting Started
 
-To use the App, visit [this URL](https://habedi.github.io/santa-2025-solution-editor/index.html) in your browser.
-
-#### Run the App Locally
+### Run the App Locally
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/habedi/santa-2025-solution-editor.git
+   git clone https://github.com/habedi/web-mem-card.git
    ```
 
 2. Start the local HTTP server:
@@ -25,14 +28,12 @@ To use the App, visit [this URL](https://habedi.github.io/santa-2025-solution-ed
    bash scripts/start_server.sh
    ```
 
-and open [http://localhost:8085/app/solution_editor.html](http://localhost:8085/app/solution_editor.html) in your browser.
+3. Open [http://localhost:8085/](http://localhost:8085/) in your browser.
 
-#### Helper Scripts
+## Tech Stack
 
-You can use the Python scripts in the [scripts](scripts) directory to:
-
-- `validate_submission.py`: Check an edited solution is valid (like there are no collisions between trees).
-- `visualize_submission.py`: Visualize tree configurations in a solution.
+- **HTML5/CSS3**: Clean, dark-mode UI.
+- **Vanilla JavaScript**: No heavy frameworks. Handles binary file parsing (Uint8Array) directly in the browser.
 
 ### Contributing
 

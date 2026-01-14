@@ -5,70 +5,70 @@
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>PlayStation 1 Memory Card Editor</title>
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>"
+          rel="icon">
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
+    <link href="css/styles.css" rel="stylesheet">
 </head>
 
 <body>
 
-    <div class="header">
-        <div class="header-left">
-            <h1>💾 PlayStation 1 Memory Card Editor</h1>
-            <div class="subtitle">Dual-Pane Editor • Drag Saves to Copy between Cards</div>
-        </div>
-        <div class="header-right">
-            <button class="theme-btn" onclick="toggleTheme()" title="Toggle Theme">🌗</button>
-        </div>
+<div class="header">
+    <div class="header-left">
+        <h1>💾 PlayStation 1 Memory Card Editor</h1>
+        <div class="subtitle">Dual-Pane Editor • Drag Saves to Copy between Cards</div>
     </div>
+    <div class="header-right">
+        <button class="theme-btn" onclick="toggleTheme()" title="Toggle Theme">🌗</button>
+    </div>
+</div>
 
-    <div class="workspace">
-        <!-- Card A -->
-        <div class="card-pane" id="pane-0">
-            <div class="pane-header">
-                <div class="pane-title">MEMORY CARD 1</div>
-                <div class="pane-controls">
-                    <button class="sm-btn" onclick="createNewCard(0)">New</button>
-                    <label class="sm-btn file-btn">Load <input type="file" onchange="loadFile(this, 0)"
-                            accept=".mcr,.bin,.gme,.mcd,.srm"></label>
-                    <button class="sm-btn btn-outline" onclick="downloadCard(0)" id="dl-0" disabled>Save</button>
-                    <button class="sm-btn btn-danger" onclick="formatCard(0)" title="Format Card">Format</button>
-                </div>
+<div class="workspace">
+    <!-- Card A -->
+    <div class="card-pane" id="pane-0">
+        <div class="pane-header">
+            <div class="pane-title">MEMORY CARD 1</div>
+            <div class="pane-controls">
+                <button class="sm-btn" onclick="createNewCard(0)">New</button>
+                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm" onchange="loadFile(this, 0)"
+                                                           type="file"></label>
+                <button class="sm-btn" disabled id="dl-0" onclick="downloadCard(0)">Save</button>
+                <button class="sm-btn btn-danger" onclick="formatCard(0)" title="Format Card">Format</button>
             </div>
-            <div class="file-status" id="status-0">No Card Loaded</div>
-            <div class="grid" id="grid-0"></div>
         </div>
+        <div class="file-status" id="status-0">No Card Loaded</div>
+        <div class="grid" id="grid-0"></div>
+    </div>
 
-        <!-- Card B -->
-        <div class="card-pane" id="pane-1">
-            <div class="pane-header">
-                <div class="pane-title">MEMORY CARD 2</div>
-                <div class="pane-controls">
-                    <button class="sm-btn" onclick="createNewCard(1)">New</button>
-                    <label class="sm-btn file-btn">Load <input type="file" onchange="loadFile(this, 1)"
-                            accept=".mcr,.bin,.gme,.mcd,.srm"></label>
-                    <button class="sm-btn btn-outline" onclick="downloadCard(1)" id="dl-1" disabled>Save</button>
-                    <button class="sm-btn btn-danger" onclick="formatCard(1)" title="Format Card">Format</button>
-                </div>
+    <!-- Card B -->
+    <div class="card-pane" id="pane-1">
+        <div class="pane-header">
+            <div class="pane-title">MEMORY CARD 2</div>
+            <div class="pane-controls">
+                <button class="sm-btn" onclick="createNewCard(1)">New</button>
+                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm" onchange="loadFile(this, 1)"
+                                                           type="file"></label>
+                <button class="sm-btn" disabled id="dl-1" onclick="downloadCard(1)">Save</button>
+                <button class="sm-btn btn-danger" onclick="formatCard(1)" title="Format Card">Format</button>
             </div>
-            <div class="file-status" id="status-1">No Card Loaded</div>
-            <div class="grid" id="grid-1"></div>
         </div>
+        <div class="file-status" id="status-1">No Card Loaded</div>
+        <div class="grid" id="grid-1"></div>
     </div>
+</div>
 
-    <div class="drop-overlay" id="dropOverlay">
-        <div class="drop-msg">Drop Memory Card File</div>
-    </div>
+<div class="drop-overlay" id="dropOverlay">
+    <div class="drop-msg">Drop Memory Card File</div>
+</div>
 
-    <!-- Hidden import input -->
-    <input type="file" class="import-input" id="importInput" accept=".mcs,.psx" onchange="handleImport(this)">
+<!-- Hidden import input -->
+<input accept=".mcs,.psx" class="import-input" id="importInput" onchange="handleImport(this)" type="file">
 
-    <script src="js/app.js"></script>
+<script src="js/app.js"></script>
 </body>
 
 </html>

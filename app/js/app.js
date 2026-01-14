@@ -5,8 +5,8 @@ const DIR_FRAME_OFFSET = 128;
 
 // --- State ---
 const cards = [
-    { data: null, name: "card1.mcr" },
-    { data: null, name: "card2.mcr" }
+    {data: null, name: "card1.mcr"},
+    {data: null, name: "card2.mcr"}
 ];
 let animationFrame = 0;
 
@@ -18,8 +18,13 @@ setInterval(() => {
 
 // Global D&D
 const dropOverlay = document.getElementById('dropOverlay');
-document.body.addEventListener('dragover', e => { e.preventDefault(); dropOverlay.classList.add('active'); });
-document.body.addEventListener('dragleave', e => { if (e.target === dropOverlay) dropOverlay.classList.remove('active'); });
+document.body.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropOverlay.classList.add('active');
+});
+document.body.addEventListener('dragleave', e => {
+    if (e.target === dropOverlay) dropOverlay.classList.remove('active');
+});
 document.body.addEventListener('drop', handleGlobalDrop);
 
 // Internal D&D State
@@ -55,7 +60,10 @@ async function handleGlobalDrop(e) {
 
 async function processFile(file, cardIndex) {
     const buf = await file.arrayBuffer();
-    if (buf.byteLength < CARD_SIZE) { alert("File too small to be a memory card."); return; }
+    if (buf.byteLength < CARD_SIZE) {
+        alert("File too small to be a memory card.");
+        return;
+    }
 
     cards[cardIndex].data = new Uint8Array(buf.slice(0, CARD_SIZE));
     cards[cardIndex].name = file.name;
@@ -69,11 +77,14 @@ function createNewCard(cardIndex) {
     if (cards[cardIndex].data && !confirm("Discard this card?")) return;
 
     const data = new Uint8Array(CARD_SIZE);
-    data[0] = 77; data[1] = 67; data[127] = 0x0E;
+    data[0] = 77;
+    data[1] = 67;
+    data[127] = 0x0E;
     for (let i = 0; i < 15; i++) {
         const off = DIR_FRAME_OFFSET + (i * 128);
         data[off] = 0xA0; // Free
-        data[off + 4] = 0; data[off + 5] = 0;
+        data[off + 4] = 0;
+        data[off + 5] = 0;
         updateChecksum(data, off);
     }
 
@@ -87,7 +98,7 @@ function createNewCard(cardIndex) {
 function downloadCard(cardIndex) {
     const c = cards[cardIndex];
     if (!c.data) return;
-    const blob = new Blob([c.data], { type: "application/octet-stream" });
+    const blob = new Blob([c.data], {type: "application/octet-stream"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = c.name;
@@ -127,7 +138,7 @@ function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
 
 // --- Drag & Drop Save Logic ---
 function handleDragStart(e, cardIdx, slotIdx) {
-    draggedSlot = { cardIndex: cardIdx, slotIndex: slotIdx };
+    draggedSlot = {cardIndex: cardIdx, slotIndex: slotIdx};
     e.dataTransfer.effectAllowed = "copy";
 }
 
@@ -146,6 +157,25 @@ function renderSlots(cardIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
+    // Count used blocks for block counter
+    let usedBlocks = 0;
+    for (let i = 0; i < 15; i++) {
+        const status = data[DIR_FRAME_OFFSET + (i * 128)];
+        if (status === 0x51 || status === 0x52 || status === 0x53) usedBlocks++;
+    }
+
+    // Update block counter display
+    let counterEl = document.getElementById(`block-counter-${cardIndex}`);
+    if (!counterEl) {
+        counterEl = document.createElement('div');
+        counterEl.id = `block-counter-${cardIndex}`;
+        counterEl.className = 'block-counter';
+        container.parentNode.insertBefore(counterEl, container);
+    }
+    counterEl.textContent = `${usedBlocks}/15 BLOCKS USED`;
+    counterEl.style.color = usedBlocks >= 13 ? 'var(--danger)' : usedBlocks >= 10 ? 'var(--accent)' : 'var(--success)';
+
+
     for (let i = 0; i < 15; i++) {
         const entryOffset = DIR_FRAME_OFFSET + (i * 128);
         const status = data[entryOffset];
@@ -155,8 +185,14 @@ function renderSlots(cardIndex) {
         card.dataset.slot = i;
 
         // Drop Targets
-        card.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; card.style.borderColor = "var(--success)"; });
-        card.addEventListener('dragleave', e => { card.style.borderColor = "var(--border)"; });
+        card.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            card.style.borderColor = "var(--success)";
+        });
+        card.addEventListener('dragleave', e => {
+            card.style.borderColor = "var(--border)";
+        });
         card.addEventListener('drop', e => {
             card.style.borderColor = "var(--border)";
             handleSlotDrop(e, cardIndex, i);
@@ -188,8 +224,12 @@ function renderSlots(cardIndex) {
                 <div class="game-code">${gameId}</div>
             </div>
             <div class="slot-actions">
-                <button class="action-btn" onclick="exportSave(${cardIndex}, ${i})" title="Export .mcs">📤</button>
-                <button class="action-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs (overwrite)">📥</button>
+                <button class="psx-btn" onclick="exportSave(${cardIndex}, ${i})" title="Export .mcs">
+                    <img src="images/psx/b.png" alt="Export">
+                </button>
+                <button class="psx-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs (overwrite)">
+                    <img src="images/psx/y.png" alt="Import">
+                </button>
                 <button class="psx-btn" onclick="deleteSave(${cardIndex}, ${i})" title="Delete">
                     <img src="images/psx/a.png" alt="Delete">
                 </button>
@@ -200,19 +240,21 @@ function renderSlots(cardIndex) {
             // Check if slot has recoverable data
             const hasData = slotHasData(data, i);
             card.innerHTML = `
-            <div style="width:48px;height:48px;background:rgba(0,0,0,0.1);border-radius:4px;"></div>
+            <div style="width:48px;height:48px;background:rgba(0,0,0,0.3);border-radius:4px;border:2px solid var(--border);"></div>
             <div class="slot-info">
                 <div class="slot-id">Slot ${i + 1}</div>
                 <div class="game-title" style="opacity:0.5">Empty</div>
             </div>
             <div class="slot-actions">
-                ${hasData ? `<button class="recover-btn" onclick="undeleteSave(${cardIndex}, ${i})" title="Recover deleted save">↩ Recover</button>` : ''}
-                <button class="action-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs">📥</button>
+                ${hasData ? `<button class="recover-btn" onclick="undeleteSave(${cardIndex}, ${i})" title="Recover deleted save">↩ RECOVER</button>` : ''}
+                <button class="psx-btn" onclick="triggerImport(${cardIndex}, ${i})" title="Import .mcs">
+                    <img src="images/psx/y.png" alt="Import">
+                </button>
             </div>
         `;
         } else { // Linked
             card.classList.add('empty');
-            card.innerHTML = `<div class="slot-info">Linked</div>`;
+            card.innerHTML = `<div class="slot-info"><div class="slot-id">Slot ${i + 1}</div><div class="game-title" style="opacity:0.5">Linked</div></div>`;
         }
         container.appendChild(card);
     }
@@ -271,7 +313,8 @@ function drawIcon(data, slotIndex, canvas) {
         const px1 = byte & 0x0F, px2 = (byte >> 4) & 0x0F;
         const c1 = palette[px1], c2 = palette[px2];
         const idx1 = i * 8, idx2 = i * 8 + 4;
-        imgData.data.set(c1, idx1); imgData.data.set(c2, idx2);
+        imgData.data.set(c1, idx1);
+        imgData.data.set(c2, idx2);
     }
     ctx.putImageData(imgData, 0, 0);
 }
@@ -293,7 +336,11 @@ function updateChecksum(data, offset) {
 }
 
 function parseString(data, o, len) {
-    let s = ""; for (let k = 0; k < len; k++) { if (data[o + k] === 0) break; s += String.fromCharCode(data[o + k]); }
+    let s = "";
+    for (let k = 0; k < len; k++) {
+        if (data[o + k] === 0) break;
+        s += String.fromCharCode(data[o + k]);
+    }
     return s;
 }
 
@@ -336,7 +383,7 @@ function exportSave(cardIndex, slotIndex) {
     // Copy data block
     mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), 128);
 
-    const blob = new Blob([mcsData], { type: "application/octet-stream" });
+    const blob = new Blob([mcsData], {type: "application/octet-stream"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${gameId || 'save'}_slot${slotIndex + 1}.mcs`;
@@ -358,10 +405,10 @@ function undeleteSave(cardIndex, slotIndex) {
 }
 
 // Import state
-let importTarget = { cardIndex: 0, slotIndex: 0 };
+let importTarget = {cardIndex: 0, slotIndex: 0};
 
 function triggerImport(cardIndex, slotIndex) {
-    importTarget = { cardIndex, slotIndex };
+    importTarget = {cardIndex, slotIndex};
     document.getElementById('importInput').click();
 }
 
@@ -379,7 +426,7 @@ async function handleImport(input) {
         return;
     }
 
-    const { cardIndex, slotIndex } = importTarget;
+    const {cardIndex, slotIndex} = importTarget;
     const data = cards[cardIndex].data;
     if (!data) {
         alert('No card loaded');

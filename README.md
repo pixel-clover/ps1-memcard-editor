@@ -1,25 +1,20 @@
-# WebMemCard - PS1 Save Manager
+## PlayStation 1 Memory Card Editor
 
-WebMemCard is a lightweight, web-based tool for managing PlayStation 1 (PS1) memory card files. It runs entirely in your browser or can be hosted locally.
+This is a simple web app for editing PlayStation 1 memory card files like `.mcr`, `.gme`, `.mcd`, and `.srm` files.
 
-## Features
+> [!NOTE]
+> Report bugs or feature requests in the [issues page](https://github.com/pixel-clover/ps1-memcard-editor/issues).
 
-- **Format Support**: Supports standard `.mcr`, `.bin`, and `.srm` (RetroArch) memory card files.
-- **Save Management**:
-    - View all 15 memory card slots.
-    - Correctly decodes **Shift-JIS** game titles.
-    - Renders save **Icons** (pixel art) directly from the save data.
-    - **Delete** unwanted saves to free up slots.
-- **Export**: Download your modified memory card file.
+### Getting Started
 
-## Getting Started
+To use the App, visit [this URL](https://pixel-clover.github.io/ps1-memcard-editor/index.html) in your browser.
 
-### Run the App Locally
+#### Run the App Locally
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/habedi/web-mem-card.git
+   git clone https://github.com/pixel-clover/ps1-memcard-editor.git
    ```
 
 2. Start the local HTTP server:
@@ -28,12 +23,7 @@ WebMemCard is a lightweight, web-based tool for managing PlayStation 1 (PS1) mem
    bash scripts/start_server.sh
    ```
 
-3. Open [http://localhost:8085/](http://localhost:8085/) in your browser.
-
-## Tech Stack
-
-- **HTML5/CSS3**: Clean, dark-mode UI.
-- **Vanilla JavaScript**: No heavy frameworks. Handles binary file parsing (Uint8Array) directly in the browser.
+and open [http://localhost:8085/index.html](http://localhost:8085/index.html) in your browser.
 
 ### Contributing
 

@@ -44,6 +44,29 @@ function toggleTheme() {
     if (saved) document.body.setAttribute('data-theme', saved);
 })();
 
+// --- Help Modal Logic ---
+function toggleHelp() {
+    const modal = document.getElementById('helpModal');
+    modal.classList.toggle('active');
+}
+
+function handleModalClick(e) {
+    // Close if clicked on overlay (outside content)
+    if (e.target.id === 'helpModal') {
+        toggleHelp();
+    }
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('helpModal');
+        if (modal.classList.contains('active')) {
+            toggleHelp();
+        }
+    }
+});
+
 // --- File Operations ---
 async function loadFile(input, cardIndex) {
     if (input.files.length > 0) await processFile(input.files[0], cardIndex);
@@ -106,32 +129,109 @@ function downloadCard(cardIndex) {
 }
 
 // --- Copy Logic ---
+// --- Copy Logic ---
+
+// Helper: Get all slots associated with a save (start -> linked -> linked...)
+function getLinkedBlocks(cardIndex, startSlot) {
+    const data = cards[cardIndex].data;
+    const slots = [startSlot];
+    let currentSlot = startSlot;
+
+    // Safety limit to prevent infinite loops in corrupted cards
+    let safety = 0;
+    while (safety++ < 15) {
+        const entryOffset = DIR_FRAME_OFFSET + (currentSlot * 128);
+        const linkVal = data[entryOffset + 8] | (data[entryOffset + 9] << 8);
+
+        // Check for End of Link (0xFFFF) or invalid link
+        if (linkVal === 0xFFFF) break;
+
+        // In a valid PS1 card, the link points to the NEXT slot index (0-14).
+        // If it's outside this range, it's invalid or end of chain.
+        // Note: Some docs say 0xFFFF is end, but actual hardware behavior can vary.
+        // We assume valid slot index implies a link.
+        if (linkVal >= 15) break;
+
+        // Circular link check
+        if (slots.includes(linkVal)) break;
+
+        slots.push(linkVal);
+        currentSlot = linkVal;
+    }
+    return slots;
+}
+
+// Helper: Find N free slots on a card
+function findFreeSlots(cardIndex, count) {
+    const data = cards[cardIndex].data;
+    const freeSlots = [];
+
+    for (let i = 0; i < 15; i++) {
+        const status = data[DIR_FRAME_OFFSET + (i * 128)];
+        if (status === 0xA0) { // Free
+            freeSlots.push(i);
+        }
+    }
+
+    if (freeSlots.length < count) return null;
+    return freeSlots.slice(0, count);
+}
+
 function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
     if (srcCardIdx === destCardIdx && srcSlotIdx === destSlotIdx) return;
     if (!cards[srcCardIdx].data || !cards[destCardIdx].data) return;
 
+    const sourceSlots = getLinkedBlocks(srcCardIdx, srcSlotIdx);
+    const destTargets = findFreeSlots(destCardIdx, sourceSlots.length);
+
+    if (!destTargets) {
+        alert(`Not enough free blocks! Need ${sourceSlots.length} blocks.`);
+        return;
+    }
+
+    // If the user dropped onto a specific empty slot, try to use that as the start
+    // provided it is in our freeSlots list.
+    const preferredStartIdx = destTargets.indexOf(destSlotIdx);
+    if (preferredStartIdx !== -1) {
+        // Rotate array so destSlotIdx is first
+        // actually, we just need to assign source[0] to destSlotIdx.
+        // Let's just swap the preferred slot to the front of the allocation list
+        [destTargets[0], destTargets[preferredStartIdx]] = [destTargets[preferredStartIdx], destTargets[0]];
+    }
+
     const srcData = cards[srcCardIdx].data;
     const destData = cards[destCardIdx].data;
 
-    // Source Offsets
-    const srcBlockIdx = srcSlotIdx + 1;
-    const srcBlockStart = srcBlockIdx * BLOCK_SIZE;
-    const srcEntryOffset = DIR_FRAME_OFFSET + (srcSlotIdx * 128);
+    // Copy Loop
+    for (let i = 0; i < sourceSlots.length; i++) {
+        const srcSlot = sourceSlots[i];
+        const destSlot = destTargets[i];
 
-    // Dest Offsets
-    const destBlockIdx = destSlotIdx + 1;
-    const destBlockStart = destBlockIdx * BLOCK_SIZE;
-    const destEntryOffset = DIR_FRAME_OFFSET + (destSlotIdx * 128);
+        // 1. Copy Block Data (8KB)
+        const srcBlockStart = (srcSlot + 1) * BLOCK_SIZE;
+        const destBlockStart = (destSlot + 1) * BLOCK_SIZE;
+        destData.set(srcData.slice(srcBlockStart, srcBlockStart + BLOCK_SIZE), destBlockStart);
 
-    // Copy 8KB Block
-    destData.set(srcData.slice(srcBlockStart, srcBlockStart + BLOCK_SIZE), destBlockStart);
+        // 2. Copy Directory Entry (128 bytes)
+        const srcEntryOffset = DIR_FRAME_OFFSET + (srcSlot * 128);
+        const destEntryOffset = DIR_FRAME_OFFSET + (destSlot * 128);
+        for (let k = 0; k < 128; k++) destData[destEntryOffset + k] = srcData[srcEntryOffset + k];
 
-    // Copy Directory Entry (Status, ID, Name)
-    // We copy the first 128 bytes of the directory entry
-    for (let k = 0; k < 128; k++) destData[destEntryOffset + k] = srcData[srcEntryOffset + k];
+        // 3. Update Link Pointers
+        if (i < sourceSlots.length - 1) {
+            // Point to the next allocated slot
+            const nextDestSlot = destTargets[i + 1];
+            destData[destEntryOffset + 8] = nextDestSlot & 0xFF;
+            destData[destEntryOffset + 9] = (nextDestSlot >> 8) & 0xFF;
+        } else {
+            // End of chain
+            destData[destEntryOffset + 8] = 0xFF;
+            destData[destEntryOffset + 9] = 0xFF;
+        }
 
-    // Recalculate Checksum
-    updateChecksum(destData, destEntryOffset);
+        // 4. Update Checksum
+        updateChecksum(destData, destEntryOffset);
+    }
 
     renderSlots(destCardIdx);
 }

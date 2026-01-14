@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>PlayStation 1 Memory Card Editor</title>
-    <link href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>"
-          rel="icon">
+    <link
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>"
+        rel="icon">
     <link href="https://fonts.googleapis.com" rel="preconnect">
     <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
     <link
@@ -19,10 +20,10 @@
 
 <div class="header">
     <div class="header-left">
-        <h1>💾 PlayStation 1 Memory Card Editor</h1>
-        <div class="subtitle">Dual-Pane Editor • Drag Saves to Copy between Cards</div>
+        <h1>PlayStation 1 Memory Card Editor</h1>
     </div>
     <div class="header-right">
+        <button class="theme-btn" onclick="toggleHelp()" title="Help">❓</button>
         <button class="theme-btn" onclick="toggleTheme()" title="Toggle Theme">🌗</button>
     </div>
 </div>
@@ -31,14 +32,14 @@
     <!-- Card A -->
     <div class="card-pane" id="pane-0">
         <div class="pane-header">
-            <div class="pane-title">MEMORY CARD 1</div>
             <div class="pane-controls">
                 <button class="sm-btn" onclick="createNewCard(0)">New</button>
-                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm" onchange="loadFile(this, 0)"
-                                                           type="file"></label>
+                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm"
+                                                           onchange="loadFile(this, 0)" type="file"></label>
                 <button class="sm-btn" disabled id="dl-0" onclick="downloadCard(0)">Save</button>
                 <button class="sm-btn btn-danger" onclick="formatCard(0)" title="Format Card">Format</button>
             </div>
+            <div class="pane-title">MEMORY CARD 1</div>
         </div>
         <div class="file-status" id="status-0">No Card Loaded</div>
         <div class="grid" id="grid-0"></div>
@@ -47,14 +48,14 @@
     <!-- Card B -->
     <div class="card-pane" id="pane-1">
         <div class="pane-header">
-            <div class="pane-title">MEMORY CARD 2</div>
             <div class="pane-controls">
                 <button class="sm-btn" onclick="createNewCard(1)">New</button>
-                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm" onchange="loadFile(this, 1)"
-                                                           type="file"></label>
+                <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm"
+                                                           onchange="loadFile(this, 1)" type="file"></label>
                 <button class="sm-btn" disabled id="dl-1" onclick="downloadCard(1)">Save</button>
                 <button class="sm-btn btn-danger" onclick="formatCard(1)" title="Format Card">Format</button>
             </div>
+            <div class="pane-title">MEMORY CARD 2</div>
         </div>
         <div class="file-status" id="status-1">No Card Loaded</div>
         <div class="grid" id="grid-1"></div>
@@ -63,6 +64,40 @@
 
 <div class="drop-overlay" id="dropOverlay">
     <div class="drop-msg">Drop Memory Card File</div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="helpModal" onclick="handleModalClick(event)">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>HOW TO USE</h2>
+            <button class="close-btn" onclick="toggleHelp()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="help-section">
+                <h3>File Support</h3>
+                <p>Supports .mcr, .bin, .gme, .mcd, .srm memory card files.</p>
+            </div>
+            <div class="help-section">
+                <h3>Managing Saves</h3>
+                <ul>
+                    <li>Copy Save: Drag and drop a save icon from one card to another.</li>
+                    <li>Delete Save: Click the Delete button or select a slot and press Delete key.</li>
+                    <li>Undelete: Deleted a save by mistake? Look for the "RECOVER" button on empty slots.</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>Import / Export</h3>
+                <ul>
+                    <li>Export: Click the Export button to download a single save as .mcs.</li>
+                    <li>Import: Click the Import button on any slot to import a .mcs file to that location.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <p>PS1 Memory Card Editor v0.1.0</p>
+        </div>
+    </div>
 </div>
 
 <!-- Hidden import input -->

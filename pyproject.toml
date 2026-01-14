@@ -1,7 +1,7 @@
 [project]
-name = "game-app"
+name = "ps1-memcard-editor"
 version = "0.1.0"
-description = "A simple web-based PS1 memory card manager"
+description = "The Python environment for the PlayStation 1 memory card editor project"
 
 requires-python = ">=3.10,<4.0"
 dependencies = [

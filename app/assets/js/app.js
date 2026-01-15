@@ -5,8 +5,8 @@ const DIR_FRAME_OFFSET = 128;
 
 // --- State ---
 const cards = [
-    {data: null, name: "card1.mcr"},
-    {data: null, name: "card2.mcr"}
+    { data: null, name: "card1.mcr" },
+    { data: null, name: "card2.mcr" }
 ];
 let animationFrame = 0;
 
@@ -31,6 +31,7 @@ document.body.addEventListener('drop', handleGlobalDrop);
 let draggedSlot = null; // { cardIndex, slotIndex }
 
 function toggleTheme() {
+    SoundManager.play('click');
     const body = document.body;
     const current = body.getAttribute('data-theme');
     const newTheme = current === 'light' ? '' : 'light';
@@ -69,7 +70,7 @@ document.body.addEventListener('click', () => {
         SoundManager.init();
         SoundManager.hasInit = true;
     }
-}, {once: true});
+}, { once: true });
 
 
 // --- Custom Modal Logic ---
@@ -188,6 +189,7 @@ async function createNewCard(cardIndex) {
 
     cards[cardIndex].data = data;
     cards[cardIndex].name = `new_card_${cardIndex + 1}.mcr`;
+    SoundManager.play('save'); // Play save sound for creation
     document.getElementById(`status-${cardIndex}`).innerText = "Created New Card";
     document.getElementById(`dl-${cardIndex}`).disabled = false;
     renderSlots(cardIndex);
@@ -196,7 +198,7 @@ async function createNewCard(cardIndex) {
 function downloadCard(cardIndex) {
     const c = cards[cardIndex];
     if (!c.data) return;
-    const blob = new Blob([c.data], {type: "application/octet-stream"});
+    const blob = new Blob([c.data], { type: "application/octet-stream" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = c.name;
@@ -313,7 +315,9 @@ function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
 
 // --- Drag & Drop Save Logic ---
 function handleDragStart(e, cardIdx, slotIdx) {
-    draggedSlot = {cardIndex: cardIdx, slotIndex: slotIdx};
+    draggedSlot = { cardIndex: cardIdx, slotIndex: slotIdx };
+    // Firefox requires setData for drag to initialize
+    e.dataTransfer.setData('text/plain', JSON.stringify(draggedSlot));
     e.dataTransfer.effectAllowed = "copy";
 }
 
@@ -335,9 +339,19 @@ async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
     }
 
     // Handle Internal Save Move
-    if (!draggedSlot) return;
+    let src = draggedSlot;
 
-    copySave(draggedSlot.cardIndex, draggedSlot.slotIndex, destCardIdx, destSlotIdx);
+    // Backup: Try to get data from event if global var is missing (robustness)
+    if (!src) {
+        try {
+            const data = e.dataTransfer.getData('text/plain');
+            if (data) src = JSON.parse(data);
+        } catch (err) { console.warn('D&D parse error', err); }
+    }
+
+    if (!src) return;
+
+    copySave(src.cardIndex, src.slotIndex, destCardIdx, destSlotIdx);
     draggedSlot = null;
     SoundManager.play('save');
 }
@@ -602,7 +616,7 @@ function exportSave(cardIndex, slotIndex) {
     const gameId = parseString(data, firstEntryOffset + 12, 10);
     const filename = `${gameId || 'save'}_slot${slotIndex + 1}${numBlocks > 1 ? '_multi' : ''}.mcs`;
 
-    const blob = new Blob([mcsData], {type: "application/octet-stream"});
+    const blob = new Blob([mcsData], { type: "application/octet-stream" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
@@ -626,10 +640,10 @@ function undeleteSave(cardIndex, slotIndex) {
 }
 
 // Import state
-let importTarget = {cardIndex: 0, slotIndex: 0};
+let importTarget = { cardIndex: 0, slotIndex: 0 };
 
 function triggerImport(cardIndex, slotIndex) {
-    importTarget = {cardIndex, slotIndex};
+    importTarget = { cardIndex, slotIndex };
     document.getElementById('importInput').click();
 }
 
@@ -648,7 +662,7 @@ async function handleImport(input) {
         return;
     }
 
-    const {cardIndex, slotIndex} = importTarget;
+    const { cardIndex, slotIndex } = importTarget;
     // Direct call support for drag & drop import
     await importMcsData(mcsData, cardIndex, slotIndex);
     input.value = '';

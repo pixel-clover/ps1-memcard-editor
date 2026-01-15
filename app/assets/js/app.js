@@ -564,29 +564,48 @@ function slotHasData(data, slotIndex) {
 }
 
 // Export a single save as .mcs file
+// Export a save as .mcs file (Supports multi-block)
 function exportSave(cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
-    const entryOffset = DIR_FRAME_OFFSET + (slotIndex * 128);
-    const blockStart = (slotIndex + 1) * BLOCK_SIZE;
-    const gameId = parseString(data, entryOffset + 12, 10);
+    // 1. Identify all blocks in this save chain
+    const linkedSlots = getLinkedBlocks(cardIndex, slotIndex);
+    const numBlocks = linkedSlots.length;
 
-    // .mcs format: 128-byte header (copy of directory entry) + 8192-byte data block
-    const mcsData = new Uint8Array(128 + BLOCK_SIZE);
+    if (numBlocks === 0) return;
 
-    // Copy directory entry as header
-    for (let i = 0; i < 128; i++) {
-        mcsData[i] = data[entryOffset + i];
+    // 2. Allocate buffer: (128 Header + 8192 Data) * numBlocks
+    const mcsSize = numBlocks * (128 + BLOCK_SIZE);
+    const mcsData = new Uint8Array(mcsSize);
+
+    let writeOffset = 0;
+
+    for (let i = 0; i < numBlocks; i++) {
+        const slot = linkedSlots[i];
+        const entryOffset = DIR_FRAME_OFFSET + (slot * 128);
+        const blockStart = (slot + 1) * BLOCK_SIZE;
+
+        // Copy directory entry (128 bytes)
+        for (let k = 0; k < 128; k++) {
+            mcsData[writeOffset + k] = data[entryOffset + k];
+        }
+
+        // Copy data block (8192 bytes)
+        mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), writeOffset + 128);
+
+        writeOffset += (128 + BLOCK_SIZE);
     }
 
-    // Copy data block
-    mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), 128);
+    // Get Game ID from the first block for filename
+    const firstEntryOffset = DIR_FRAME_OFFSET + (linkedSlots[0] * 128);
+    const gameId = parseString(data, firstEntryOffset + 12, 10);
+    const filename = `${gameId || 'save'}_slot${slotIndex + 1}${numBlocks > 1 ? '_multi' : ''}.mcs`;
 
     const blob = new Blob([mcsData], {type: "application/octet-stream"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${gameId || 'save'}_slot${slotIndex + 1}.mcs`;
+    a.download = filename;
     a.click();
 }
 
@@ -621,9 +640,10 @@ async function handleImport(input) {
     const buf = await file.arrayBuffer();
     const mcsData = new Uint8Array(buf);
 
-    // Validate .mcs file size (128-byte header + 8KB data)
-    if (mcsData.length < 128 + BLOCK_SIZE) {
-        await showCustomAlert('Invalid .mcs file: too small', "IMPORT ERROR");
+    // Validate .mcs file size (must be multiple of 8320 bytes)
+    const frameSize = 128 + BLOCK_SIZE;
+    if (mcsData.length % frameSize !== 0) {
+        await showCustomAlert('Invalid .mcs file: Size matches partial blocks.', "IMPORT ERROR");
         input.value = '';
         return;
     }
@@ -635,6 +655,7 @@ async function handleImport(input) {
 }
 
 // Refactored Import Logic to be shared
+// Refactored Import Logic to be shared (Supports multi-block)
 async function importMcsData(mcsData, cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) {
@@ -642,19 +663,82 @@ async function importMcsData(mcsData, cardIndex, slotIndex) {
         return;
     }
 
-    const entryOffset = DIR_FRAME_OFFSET + (slotIndex * 128);
-    const blockStart = (slotIndex + 1) * BLOCK_SIZE;
+    const frameSize = 128 + BLOCK_SIZE;
+    const numBlocks = mcsData.length / frameSize;
 
-    // Copy header to directory entry
-    for (let i = 0; i < 128; i++) {
-        data[entryOffset + i] = mcsData[i];
+    if (numBlocks === 0) return;
+
+    // 1. Find free slots
+    // We already have a specific target slot from the user drop (slotIndex).
+    // Is it free?
+    const firstStatus = data[DIR_FRAME_OFFSET + (slotIndex * 128)];
+
+    // We need 'numBlocks' free slots.
+    // If the target slot is empty, we use it as the first one.
+    // Then we need to find (numBlocks - 1) *other* free slots.
+
+    // Check if target slot is actually free (or overwritable?)
+    // The UI says "Import (Overwrite)" on buttons, but checking 0xA0 is safer.
+    // However, if user explicitly clicked a slot, we usually overwrite it.
+    // Let's assume the user WANTS to overwrite starting at 'slotIndex'.
+
+    // But we need (numBlocks - 1) MORE slots.
+    let needed = numBlocks - 1;
+    let allocatedSlots = [slotIndex];
+
+    if (needed > 0) {
+        // Find other free slots, EXCLUDING the one we start at (if it was free)
+        const others = findFreeSlots(cardIndex, 15); // Get all free
+        // Filter out our starting slot from the free list so we don't double count it
+        // (If slotIndex was free, it would be in 'others')
+        const existingFree = others ? others.filter(s => s !== slotIndex) : [];
+
+        if (existingFree.length < needed) {
+            await showCustomAlert(`Need ${numBlocks} free blocks, but only found ${existingFree.length + 1} available (including target).`, "IMPORT ERROR");
+            return;
+        }
+
+        // Take the first 'needed' slots
+        allocatedSlots = allocatedSlots.concat(existingFree.slice(0, needed));
     }
 
-    // Copy data block
-    data.set(mcsData.slice(128, 128 + BLOCK_SIZE), blockStart);
+    // 2. Import Loop
+    let readOffset = 0;
 
-    // Recalculate checksum
-    updateChecksum(data, entryOffset);
+    for (let i = 0; i < numBlocks; i++) {
+        const destSlot = allocatedSlots[i];
+        const entryOffset = DIR_FRAME_OFFSET + (destSlot * 128);
+        const blockStart = (destSlot + 1) * BLOCK_SIZE;
+
+        // Extract Header & Data from MCS
+        const mcsHeader = mcsData.slice(readOffset, readOffset + 128);
+        const mcsBlock = mcsData.slice(readOffset + 128, readOffset + 128 + BLOCK_SIZE);
+
+        // Write Header to Directory
+        for (let k = 0; k < 128; k++) data[entryOffset + k] = mcsHeader[k];
+
+        // Write Data Block
+        data.set(mcsBlock, blockStart);
+
+        // 3. Relink Pointers
+        // The headers in the MCS file contain OLD link pointers (to where they were on the original card).
+        // We must update them to point to our NEW allocatedSlots.
+
+        if (i < numBlocks - 1) {
+            const nextSlot = allocatedSlots[i + 1];
+            data[entryOffset + 8] = nextSlot & 0xFF;
+            data[entryOffset + 9] = (nextSlot >> 8) & 0xFF; // should be 0
+        } else {
+            // End of chain
+            data[entryOffset + 8] = 0xFF;
+            data[entryOffset + 9] = 0xFF;
+        }
+
+        // 4. Update Checksum (since we modified the link pointers)
+        updateChecksum(data, entryOffset);
+
+        readOffset += frameSize;
+    }
 
     SoundManager.play('save'); // Play success sound
     renderSlots(cardIndex);

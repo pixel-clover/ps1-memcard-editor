@@ -2,6 +2,9 @@ name: Deploy App to GitHub Pages
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -22,6 +25,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

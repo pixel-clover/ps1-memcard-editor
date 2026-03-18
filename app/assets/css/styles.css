@@ -278,8 +278,8 @@ input[type="file"] {
 }
 
 .card-pane {
-    flex: 1;
-    min-width: 450px;
+    flex: 1 1 560px;
+    min-width: 320px;
     background: var(--card-bg-gradient);
     border-radius: 4px;
     padding: 20px;
@@ -296,6 +296,7 @@ input[type="file"] {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     margin-bottom: 15px;
     border-bottom: 3px solid var(--border);
     padding-bottom: 12px;
@@ -537,6 +538,7 @@ input[type="file"] {
     display: flex;
     gap: 6px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .action-btn {
@@ -612,14 +614,20 @@ input[type="file"] {
 
 .modal-content {
     background: var(--card-bg-gradient);
-    width: 600px;
+    width: min(600px, calc(100vw - 32px));
     max-width: 90%;
+    max-height: calc(100vh - 32px);
     border: 3px solid var(--border);
     border-radius: 4px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
     display: flex;
     flex-direction: column;
     animation: modal-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.alert-modal {
+    width: min(400px, calc(100vw - 32px));
+    text-align: center;
 }
 
 @keyframes modal-pop {
@@ -669,6 +677,7 @@ input[type="file"] {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    overflow-y: auto;
 }
 
 .help-section h3 {
@@ -705,4 +714,208 @@ input[type="file"] {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7em;
     color: var(--text-muted);
+}
+
+.alert-actions {
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 1024px) {
+    body {
+        padding: 16px;
+    }
+
+    .header {
+        padding: 18px 20px;
+    }
+
+    .workspace {
+        gap: 20px;
+    }
+
+    .card-pane {
+        flex-basis: 460px;
+        min-width: 280px;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+    }
+
+    .header {
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 16px;
+    }
+
+    .header-right {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .workspace {
+        gap: 18px;
+    }
+
+    .card-pane {
+        flex-basis: 100%;
+        min-width: 0;
+        padding: 16px;
+    }
+
+    .pane-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .pane-title {
+        font-size: 0.65em;
+    }
+
+    .pane-controls {
+        width: 100%;
+    }
+
+    .grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+
+    .sm-btn {
+        min-height: 44px;
+        padding: 10px 14px;
+    }
+
+    .psx-btn {
+        width: 40px;
+        height: 40px;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .drop-msg {
+        padding: 24px 28px;
+        font-size: 0.85em;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+
+    h1 {
+        font-size: 0.85em;
+        line-height: 1.4;
+    }
+
+    .header {
+        padding: 14px;
+        margin-bottom: 18px;
+    }
+
+    .header-right {
+        gap: 8px;
+    }
+
+    .workspace {
+        gap: 16px;
+    }
+
+    .card-pane {
+        padding: 14px;
+    }
+
+    .pane-title {
+        font-size: 0.58em;
+    }
+
+    .file-status,
+    .block-counter {
+        font-size: 0.68em;
+    }
+
+    .pane-controls {
+        gap: 10px;
+    }
+
+    .pane-controls .sm-btn,
+    .pane-controls .file-btn {
+        flex: 1 1 calc(50% - 10px);
+        justify-content: center;
+    }
+
+    .grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .slot-card {
+        flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .icon-canvas {
+        width: 40px;
+        height: 40px;
+    }
+
+    .slot-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .drop-msg {
+        padding: 18px 20px;
+        font-size: 0.7em;
+    }
+
+    .modal-content,
+    .alert-modal {
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+
+    .modal-header {
+        padding-top: 14px;
+        padding-bottom: 14px;
+    }
+
+    .modal-header h2 {
+        font-size: 0.65em;
+        line-height: 1.5;
+    }
+
+    .modal-body {
+        gap: 16px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+
+    .help-section h3 {
+        font-size: 0.52em;
+    }
+
+    .help-section p,
+    .help-section ul {
+        font-size: 0.82em;
+    }
+
+    .alert-actions .sm-btn {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
 }

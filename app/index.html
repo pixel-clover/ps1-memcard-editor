@@ -106,14 +106,13 @@
 
     <!-- Alert/Confirm Modal -->
     <div class="modal-overlay" id="alertModal">
-        <div class="modal-content" style="width: 400px; text-align: center;">
+        <div class="modal-content alert-modal">
             <div class="modal-header" style="justify-content: center;">
                 <h2 id="alertTitle">ATTENTION</h2>
             </div>
             <div class="modal-body">
                 <p id="alertMessage" style="margin-bottom: 20px;"></p>
-                <div class="modal-footer"
-                    style="padding: 0; border: none; background: transparent; display: flex; justify-content: center; gap: 10px;">
+                <div class="modal-footer alert-actions">
                     <button class="sm-btn" id="alertOkBtn" onclick="closeAlert(true)">OK</button>
                     <button class="sm-btn btn-danger" id="alertCancelBtn" onclick="closeAlert(false)"
                         style="display: none;">CANCEL

@@ -79,3 +79,6 @@ site/
 .env
 *.csv
 hex_*
+node_modules/
+.claude/
+.codex

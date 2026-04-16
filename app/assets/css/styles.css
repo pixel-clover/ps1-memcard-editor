@@ -263,6 +263,18 @@ button:active {
     color: var(--accent);
 }
 
+[data-theme="light"] .format-select {
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E") no-repeat right 8px center,
+        linear-gradient(180deg, #4a6a9a 0%, #2a4a6a 100%);
+}
+
+[data-theme="light"] .format-select:hover {
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E") no-repeat right 8px center,
+        linear-gradient(180deg, #5a7aba 0%, #3a5a8a 100%);
+}
+
 /* Format Dropdown */
 .format-select {
     font-family: 'Press Start 2P', cursive;
@@ -270,11 +282,17 @@ button:active {
     padding: 8px 10px;
     appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 8px center;
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E") no-repeat right 8px center,
+        linear-gradient(180deg, var(--ps1-blue) 0%, #0f2540 100%);
     padding-right: 24px;
     cursor: pointer;
+}
+
+.format-select:hover {
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E") no-repeat right 8px center,
+        linear-gradient(180deg, #2a4a70 0%, #1a3a5a 100%);
 }
 
 .format-select option {

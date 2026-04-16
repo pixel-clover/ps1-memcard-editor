@@ -133,6 +133,7 @@ document.addEventListener('keydown', e => {
 // --- File Operations ---
 async function loadFile(input, cardIndex) {
     if (input.files.length > 0) await processFile(input.files[0], cardIndex);
+    input.value = '';
 }
 
 async function handleGlobalDrop(e) {
@@ -202,9 +203,11 @@ function downloadCard(cardIndex) {
     if (!c.data) return;
     const blob = new Blob([c.data], { type: "application/octet-stream" });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = c.name;
     a.click();
+    URL.revokeObjectURL(url);
 }
 
 const SUPPORTED_FORMATS = ['.mcr', '.bin', '.gme', '.mcd', '.srm'];
@@ -234,7 +237,6 @@ function syncFormatDropdown(cardIndex, filename) {
     }
 }
 
-// --- Copy Logic ---
 // --- Copy Logic ---
 
 // Helper: Get all slots associated with a save (start -> linked -> linked...)
@@ -438,8 +440,8 @@ function renderSlots(cardIndex) {
             card.addEventListener('dragstart', e => handleDragStart(e, cardIndex, i));
 
             const blockIdx = i + 1;
-            const gameId = parseString(data, entryOffset + 12, 10);
-            const title = parseShiftJIS(data, (blockIdx * BLOCK_SIZE) + 4, 64);
+            const gameId = escapeHtml(parseString(data, entryOffset + 12, 10));
+            const title = escapeHtml(parseShiftJIS(data, (blockIdx * BLOCK_SIZE) + 4, 64));
 
             // Get save size from directory entry (bytes 4-7)
             const sizeBytes = data[entryOffset + 4] | (data[entryOffset + 5] << 8) |
@@ -559,14 +561,15 @@ async function deleteSave(cardIndex, slotIndex) {
     if (!confirmDelete) return;
 
     const data = cards[cardIndex].data;
-    const off = DIR_FRAME_OFFSET + (slotIndex * 128);
 
-    // FIX: Only mark directory entry as Free (0xA0). DO NOT wipe data block.
-    // This allows "Undelete" to work correctly.
-    data[off] = 0xA0; // Free
-
-    // Update checksum for the modified directory entry
-    updateChecksum(data, off);
+    // Mark all blocks in the save chain as Free (0xA0).
+    // Data blocks are preserved so "Undelete/Recover" can restore them.
+    const linkedSlots = getLinkedBlocks(cardIndex, slotIndex);
+    for (const slot of linkedSlots) {
+        const off = DIR_FRAME_OFFSET + (slot * 128);
+        data[off] = 0xA0; // Free
+        updateChecksum(data, off);
+    }
 
     SoundManager.play('delete');
     renderSlots(cardIndex);
@@ -594,6 +597,12 @@ function parseShiftJIS(data, offset, length) {
     return new TextDecoder('shift-jis').decode(sub);
 }
 
+// --- Utility ---
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // --- Phase 1: New Features ---
 
 // Check if an empty slot has recoverable data
@@ -606,7 +615,6 @@ function slotHasData(data, slotIndex) {
     return false;
 }
 
-// Export a single save as .mcs file
 // Export a save as .mcs file (Supports multi-block)
 function exportSave(cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
@@ -647,24 +655,35 @@ function exportSave(cardIndex, slotIndex) {
 
     const blob = new Blob([mcsData], { type: "application/octet-stream" });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = filename;
     a.click();
+    URL.revokeObjectURL(url);
 }
 
 
-// Undelete a save (restore deleted slot)
+// Undelete a save (restore deleted slot and its linked blocks)
 function undeleteSave(cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
-    const entryOffset = DIR_FRAME_OFFSET + (slotIndex * 128);
+    // Restore the entire save chain with correct status bytes:
+    // 0x51 = head, 0x52 = middle link, 0x53 = last link
+    const linkedSlots = getLinkedBlocks(cardIndex, slotIndex);
+    for (let i = 0; i < linkedSlots.length; i++) {
+        const entryOffset = DIR_FRAME_OFFSET + (linkedSlots[i] * 128);
+        if (i === 0) {
+            data[entryOffset] = 0x51;
+        } else if (i < linkedSlots.length - 1) {
+            data[entryOffset] = 0x52;
+        } else {
+            data[entryOffset] = 0x53;
+        }
+        updateChecksum(data, entryOffset);
+    }
 
-    // Set status back to Active (0x51)
-    data[entryOffset] = 0x51;
-    updateChecksum(data, entryOffset);
-
-    SoundManager.play('save'); // Play save sound for recovery
+    SoundManager.play('save');
     renderSlots(cardIndex);
 }
 
@@ -697,8 +716,7 @@ async function handleImport(input) {
     input.value = '';
 }
 
-// Refactored Import Logic to be shared
-// Refactored Import Logic to be shared (Supports multi-block)
+// Import .mcs data into card (Supports multi-block)
 async function importMcsData(mcsData, cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) {
@@ -712,10 +730,6 @@ async function importMcsData(mcsData, cardIndex, slotIndex) {
     if (numBlocks === 0) return;
 
     // 1. Find free slots
-    // We already have a specific target slot from the user drop (slotIndex).
-    // Is it free?
-    const firstStatus = data[DIR_FRAME_OFFSET + (slotIndex * 128)];
-
     // We need 'numBlocks' free slots.
     // If the target slot is empty, we use it as the first one.
     // Then we need to find (numBlocks - 1) *other* free slots.

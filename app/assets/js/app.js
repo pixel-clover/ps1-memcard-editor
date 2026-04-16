@@ -1,7 +1,11 @@
-// --- Constants ---
-const BLOCK_SIZE = 8192;
-const CARD_SIZE = 131072;
-const DIR_FRAME_OFFSET = 128;
+import {
+    BLOCK_SIZE, CARD_SIZE, DIR_FRAME_OFFSET, SUPPORTED_FORMATS, MCS_FRAME_SIZE,
+    escapeHtml, getFileExtension, changeFileExtension,
+    updateChecksum, parseString, parseShiftJIS,
+    getLinkedBlocks, findFreeSlots, slotHasData, countUsedBlocks,
+    createBlankCard, formatCardData, deleteSaveFromCard, undeleteSaveOnCard,
+    buildMcsExport, validateMcsSize, importMcsToCard, copySaveData
+} from './memcard.js';
 
 // --- State ---
 const cards = [
@@ -49,7 +53,6 @@ function toggleTheme() {
 const SoundManager = {
     sounds: {},
     init() {
-        // Preload sounds - USER must provide these files in app/assets/audio/
         const audioFiles = ['boot', 'hover', 'click', 'save', 'delete', 'error'];
         audioFiles.forEach(name => {
             this.sounds[name] = new Audio(`assets/audio/${name}.wav`);
@@ -64,7 +67,6 @@ const SoundManager = {
     }
 };
 
-// Initialize Audio on first interaction to bypass browser policies
 document.body.addEventListener('click', () => {
     if (!SoundManager.hasInit) {
         SoundManager.init();
@@ -123,7 +125,6 @@ function handleModalClick(event) {
     }
 }
 
-// Close on Escape key
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
@@ -133,6 +134,7 @@ document.addEventListener('keydown', e => {
 // --- File Operations ---
 async function loadFile(input, cardIndex) {
     if (input.files.length > 0) await processFile(input.files[0], cardIndex);
+    input.value = '';
 }
 
 async function handleGlobalDrop(e) {
@@ -142,7 +144,6 @@ async function handleGlobalDrop(e) {
     if (e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
 
-        // Check if user dropped an MCS file globally (common mistake)
         if (file.name.toLowerCase().endsWith('.mcs')) {
             await showCustomAlert("To import a single save (.mcs), drop it directly onto a SLOT, not the background.", "IMPORT ERROR");
             return;
@@ -166,6 +167,7 @@ async function processFile(file, cardIndex) {
 
     document.getElementById(`status-${cardIndex}`).innerText = file.name;
     document.getElementById(`dl-${cardIndex}`).disabled = false;
+    syncFormatDropdown(cardIndex, file.name);
     renderSlots(cardIndex);
 }
 
@@ -175,23 +177,12 @@ async function createNewCard(cardIndex) {
         if (!confirmDiscard) return;
     }
 
-    const data = new Uint8Array(CARD_SIZE);
-    data[0] = 77;
-    data[1] = 67;
-    data[127] = 0x0E;
-    for (let i = 0; i < 15; i++) {
-        const off = DIR_FRAME_OFFSET + (i * 128);
-        data[off] = 0xA0; // Free
-        data[off + 4] = 0;
-        data[off + 5] = 0;
-        updateChecksum(data, off);
-    }
-
-    cards[cardIndex].data = data;
+    cards[cardIndex].data = createBlankCard();
     cards[cardIndex].name = `new_card_${cardIndex + 1}.mcr`;
-    SoundManager.play('save'); // Play save sound for creation
+    SoundManager.play('save');
     document.getElementById(`status-${cardIndex}`).innerText = "Created New Card";
     document.getElementById(`dl-${cardIndex}`).disabled = false;
+    syncFormatDropdown(cardIndex, cards[cardIndex].name);
     renderSlots(cardIndex);
 }
 
@@ -200,114 +191,37 @@ function downloadCard(cardIndex) {
     if (!c.data) return;
     const blob = new Blob([c.data], { type: "application/octet-stream" });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = c.name;
     a.click();
+    URL.revokeObjectURL(url);
+}
+
+// --- Format Selection ---
+
+function changeFormat(cardIndex) {
+    const select = document.getElementById(`format-${cardIndex}`);
+    cards[cardIndex].name = changeFileExtension(cards[cardIndex].name, select.value);
+    document.getElementById(`status-${cardIndex}`).innerText = cards[cardIndex].name;
+}
+
+function syncFormatDropdown(cardIndex, filename) {
+    const ext = getFileExtension(filename);
+    const select = document.getElementById(`format-${cardIndex}`);
+    select.value = SUPPORTED_FORMATS.includes(ext) ? ext : '.mcr';
 }
 
 // --- Copy Logic ---
-// --- Copy Logic ---
-
-// Helper: Get all slots associated with a save (start -> linked -> linked...)
-function getLinkedBlocks(cardIndex, startSlot) {
-    const data = cards[cardIndex].data;
-    const slots = [startSlot];
-    let currentSlot = startSlot;
-
-    // Safety limit to prevent infinite loops in corrupted cards
-    let safety = 0;
-    while (safety++ < 15) {
-        const entryOffset = DIR_FRAME_OFFSET + (currentSlot * 128);
-        const linkVal = data[entryOffset + 8] | (data[entryOffset + 9] << 8);
-
-        // Check for End of Link (0xFFFF) or invalid link
-        if (linkVal === 0xFFFF) break;
-
-        // In a valid PS1 card, the link points to the NEXT slot index (0-14).
-        // If it's outside this range, it's invalid or end of chain.
-        // Note: Some docs say 0xFFFF is end, but actual hardware behavior can vary.
-        // We assume valid slot index implies a link.
-        if (linkVal >= 15) break;
-
-        // Circular link check
-        if (slots.includes(linkVal)) break;
-
-        slots.push(linkVal);
-        currentSlot = linkVal;
-    }
-    return slots;
-}
-
-// Helper: Find N free slots on a card
-function findFreeSlots(cardIndex, count) {
-    const data = cards[cardIndex].data;
-    const freeSlots = [];
-
-    for (let i = 0; i < 15; i++) {
-        const status = data[DIR_FRAME_OFFSET + (i * 128)];
-        if (status === 0xA0) { // Free
-            freeSlots.push(i);
-        }
-    }
-
-    if (freeSlots.length < count) return null;
-    return freeSlots.slice(0, count);
-}
 
 function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
     if (srcCardIdx === destCardIdx && srcSlotIdx === destSlotIdx) return;
     if (!cards[srcCardIdx].data || !cards[destCardIdx].data) return;
 
-    const sourceSlots = getLinkedBlocks(srcCardIdx, srcSlotIdx);
-    const destTargets = findFreeSlots(destCardIdx, sourceSlots.length);
-
-    if (!destTargets) {
-        showCustomAlert(`Not enough free blocks! Need ${sourceSlots.length} blocks.`, "COPY ERROR");
+    const error = copySaveData(cards[srcCardIdx].data, srcSlotIdx, cards[destCardIdx].data, destSlotIdx);
+    if (error) {
+        showCustomAlert(error, "COPY ERROR");
         return;
-    }
-
-    // If the user dropped onto a specific empty slot, try to use that as the start
-    // provided it is in our freeSlots list.
-    const preferredStartIdx = destTargets.indexOf(destSlotIdx);
-    if (preferredStartIdx !== -1) {
-        // Rotate array so destSlotIdx is first
-        // actually, we just need to assign source[0] to destSlotIdx.
-        // Let's just swap the preferred slot to the front of the allocation list
-        [destTargets[0], destTargets[preferredStartIdx]] = [destTargets[preferredStartIdx], destTargets[0]];
-    }
-
-    const srcData = cards[srcCardIdx].data;
-    const destData = cards[destCardIdx].data;
-
-    // Copy Loop
-    for (let i = 0; i < sourceSlots.length; i++) {
-        const srcSlot = sourceSlots[i];
-        const destSlot = destTargets[i];
-
-        // 1. Copy Block Data (8KB)
-        const srcBlockStart = (srcSlot + 1) * BLOCK_SIZE;
-        const destBlockStart = (destSlot + 1) * BLOCK_SIZE;
-        destData.set(srcData.slice(srcBlockStart, srcBlockStart + BLOCK_SIZE), destBlockStart);
-
-        // 2. Copy Directory Entry (128 bytes)
-        const srcEntryOffset = DIR_FRAME_OFFSET + (srcSlot * 128);
-        const destEntryOffset = DIR_FRAME_OFFSET + (destSlot * 128);
-        for (let k = 0; k < 128; k++) destData[destEntryOffset + k] = srcData[srcEntryOffset + k];
-
-        // 3. Update Link Pointers
-        if (i < sourceSlots.length - 1) {
-            // Point to the next allocated slot
-            const nextDestSlot = destTargets[i + 1];
-            destData[destEntryOffset + 8] = nextDestSlot & 0xFF;
-            destData[destEntryOffset + 9] = (nextDestSlot >> 8) & 0xFF;
-        } else {
-            // End of chain
-            destData[destEntryOffset + 8] = 0xFF;
-            destData[destEntryOffset + 9] = 0xFF;
-        }
-
-        // 4. Update Checksum
-        updateChecksum(destData, destEntryOffset);
     }
 
     renderSlots(destCardIdx);
@@ -316,7 +230,6 @@ function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
 // --- Drag & Drop Save Logic ---
 function handleDragStart(e, cardIdx, slotIdx) {
     draggedSlot = { cardIndex: cardIdx, slotIndex: slotIdx };
-    // Firefox requires setData for drag to initialize
     e.dataTransfer.setData('text/plain', JSON.stringify(draggedSlot));
     e.dataTransfer.effectAllowed = "copy";
 }
@@ -324,7 +237,6 @@ function handleDragStart(e, cardIdx, slotIdx) {
 async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
     e.preventDefault();
 
-    // Check for External File Drop (Import .mcs)
     if (e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
         if (!file.name.toLowerCase().endsWith('.mcs')) {
@@ -334,14 +246,12 @@ async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
 
         const buf = await file.arrayBuffer();
         const mcsData = new Uint8Array(buf);
-        await importMcsData(mcsData, destCardIdx, destSlotIdx);
+        await doImportMcs(mcsData, destCardIdx, destSlotIdx);
         return;
     }
 
-    // Handle Internal Save Move
     let src = draggedSlot;
 
-    // Backup: Try to get data from event if global var is missing (robustness)
     if (!src) {
         try {
             const data = e.dataTransfer.getData('text/plain');
@@ -363,14 +273,8 @@ function renderSlots(cardIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
-    // Count used blocks for block counter
-    let usedBlocks = 0;
-    for (let i = 0; i < 15; i++) {
-        const status = data[DIR_FRAME_OFFSET + (i * 128)];
-        if (status === 0x51 || status === 0x52 || status === 0x53) usedBlocks++;
-    }
+    const usedBlocks = countUsedBlocks(data);
 
-    // Update block counter display
     let counterEl = document.getElementById(`block-counter-${cardIndex}`);
     if (!counterEl) {
         counterEl = document.createElement('div');
@@ -381,7 +285,6 @@ function renderSlots(cardIndex) {
     counterEl.textContent = `${usedBlocks}/15 BLOCKS USED`;
     counterEl.style.color = usedBlocks >= 13 ? 'var(--danger)' : usedBlocks >= 10 ? 'var(--accent)' : 'var(--success)';
 
-
     for (let i = 0; i < 15; i++) {
         const entryOffset = DIR_FRAME_OFFSET + (i * 128);
         const status = data[entryOffset];
@@ -390,13 +293,12 @@ function renderSlots(cardIndex) {
         card.dataset.card = cardIndex;
         card.dataset.slot = i;
 
-        // Drop Targets
         card.addEventListener('dragover', e => {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
             card.style.borderColor = "var(--success)";
         });
-        card.addEventListener('dragleave', e => {
+        card.addEventListener('dragleave', () => {
             card.style.borderColor = "var(--border)";
         });
         card.addEventListener('drop', e => {
@@ -409,16 +311,14 @@ function renderSlots(cardIndex) {
             card.addEventListener('dragstart', e => handleDragStart(e, cardIndex, i));
 
             const blockIdx = i + 1;
-            const gameId = parseString(data, entryOffset + 12, 10);
-            const title = parseShiftJIS(data, (blockIdx * BLOCK_SIZE) + 4, 64);
+            const gameId = escapeHtml(parseString(data, entryOffset + 12, 10));
+            const title = escapeHtml(parseShiftJIS(data, (blockIdx * BLOCK_SIZE) + 4, 64));
 
-            // Get save size from directory entry (bytes 4-7)
             const sizeBytes = data[entryOffset + 4] | (data[entryOffset + 5] << 8) |
                 (data[entryOffset + 6] << 16) | (data[entryOffset + 7] << 24);
             const sizeKB = Math.round(sizeBytes / 1024);
             const blocksUsed = Math.ceil(sizeBytes / BLOCK_SIZE) || 1;
 
-            // Create tooltip text
             const tooltipText = `Slot: ${i + 1}\nGame: ${title}\nID: ${gameId}\nSize: ${sizeKB} KB (${blocksUsed} block${blocksUsed > 1 ? 's' : ''})`;
 
             card.title = tooltipText;
@@ -443,7 +343,6 @@ function renderSlots(cardIndex) {
         `;
         } else if (status === 0xA0) { // Empty
             card.classList.add('empty');
-            // Check if slot has recoverable data
             const hasData = slotHasData(data, i);
             card.innerHTML = `
             <div style="width:48px;height:48px;background:rgba(0,0,0,0.3);border-radius:4px;border:2px solid var(--border);"></div>
@@ -484,7 +383,6 @@ function drawIcon(data, slotIndex, canvas) {
     const ctx = canvas.getContext('2d');
     const blockStart = (slotIndex + 1) * BLOCK_SIZE;
 
-    // Boundary check to prevent reading past array bounds
     if (blockStart + 0x80 + 128 > data.length) {
         ctx.fillStyle = '#333';
         ctx.fillRect(0, 0, 16, 16);
@@ -496,11 +394,10 @@ function drawIcon(data, slotIndex, canvas) {
 
     let frameOffset = 0x80;
     if (animMode > 0x11) {
-        const maxFrames = (animMode & 0x0F) || 1; // Prevent division by zero
+        const maxFrames = (animMode & 0x0F) || 1;
         const currentFrame = animationFrame % maxFrames;
         frameOffset = 0x80 + (currentFrame * 128);
 
-        // Check if frame would exceed bounds
         if (blockStart + frameOffset + 128 > data.length) {
             frameOffset = 0x80;
         }
@@ -525,121 +422,44 @@ function drawIcon(data, slotIndex, canvas) {
     ctx.putImageData(imgData, 0, 0);
 }
 
+// --- Save Operations ---
+
 async function deleteSave(cardIndex, slotIndex) {
     const confirmDelete = await showCustomConfirm("Permanently Delete Save?", "DELETE SAVE");
     if (!confirmDelete) return;
 
-    const data = cards[cardIndex].data;
-    const off = DIR_FRAME_OFFSET + (slotIndex * 128);
-
-    // FIX: Only mark directory entry as Free (0xA0). DO NOT wipe data block.
-    // This allows "Undelete" to work correctly.
-    data[off] = 0xA0; // Free
-
-    // Update checksum for the modified directory entry
-    updateChecksum(data, off);
-
+    deleteSaveFromCard(cards[cardIndex].data, slotIndex);
     SoundManager.play('delete');
     renderSlots(cardIndex);
 }
 
-function updateChecksum(data, offset) {
-    let x = 0;
-    for (let k = 0; k < 127; k++) x ^= data[offset + k];
-    data[offset + 127] = x;
-}
-
-function parseString(data, o, len) {
-    let s = "";
-    for (let k = 0; k < len; k++) {
-        if (data[o + k] === 0) break;
-        s += String.fromCharCode(data[o + k]);
-    }
-    return s;
-}
-
-function parseShiftJIS(data, offset, length) {
-    let sub = data.slice(offset, offset + length);
-    let end = sub.indexOf(0);
-    if (end >= 0) sub = sub.slice(0, end);
-    return new TextDecoder('shift-jis').decode(sub);
-}
-
-// --- Phase 1: New Features ---
-
-// Check if an empty slot has recoverable data
-function slotHasData(data, slotIndex) {
-    const blockStart = (slotIndex + 1) * BLOCK_SIZE;
-    // Check if there's any non-zero data in the first 128 bytes of the block
-    for (let i = 0; i < 128; i++) {
-        if (data[blockStart + i] !== 0) return true;
-    }
-    return false;
-}
-
-// Export a single save as .mcs file
-// Export a save as .mcs file (Supports multi-block)
-function exportSave(cardIndex, slotIndex) {
-    const data = cards[cardIndex].data;
-    if (!data) return;
-
-    // 1. Identify all blocks in this save chain
-    const linkedSlots = getLinkedBlocks(cardIndex, slotIndex);
-    const numBlocks = linkedSlots.length;
-
-    if (numBlocks === 0) return;
-
-    // 2. Allocate buffer: (128 Header + 8192 Data) * numBlocks
-    const mcsSize = numBlocks * (128 + BLOCK_SIZE);
-    const mcsData = new Uint8Array(mcsSize);
-
-    let writeOffset = 0;
-
-    for (let i = 0; i < numBlocks; i++) {
-        const slot = linkedSlots[i];
-        const entryOffset = DIR_FRAME_OFFSET + (slot * 128);
-        const blockStart = (slot + 1) * BLOCK_SIZE;
-
-        // Copy directory entry (128 bytes)
-        for (let k = 0; k < 128; k++) {
-            mcsData[writeOffset + k] = data[entryOffset + k];
-        }
-
-        // Copy data block (8192 bytes)
-        mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), writeOffset + 128);
-
-        writeOffset += (128 + BLOCK_SIZE);
-    }
-
-    // Get Game ID from the first block for filename
-    const firstEntryOffset = DIR_FRAME_OFFSET + (linkedSlots[0] * 128);
-    const gameId = parseString(data, firstEntryOffset + 12, 10);
-    const filename = `${gameId || 'save'}_slot${slotIndex + 1}${numBlocks > 1 ? '_multi' : ''}.mcs`;
-
-    const blob = new Blob([mcsData], { type: "application/octet-stream" });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-}
-
-
-// Undelete a save (restore deleted slot)
 function undeleteSave(cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
-    const entryOffset = DIR_FRAME_OFFSET + (slotIndex * 128);
-
-    // Set status back to Active (0x51)
-    data[entryOffset] = 0x51;
-    updateChecksum(data, entryOffset);
-
-    SoundManager.play('save'); // Play save sound for recovery
+    undeleteSaveOnCard(data, slotIndex);
+    SoundManager.play('save');
     renderSlots(cardIndex);
 }
 
-// Import state
+function exportSave(cardIndex, slotIndex) {
+    const data = cards[cardIndex].data;
+    if (!data) return;
+
+    const result = buildMcsExport(data, slotIndex);
+    if (!result) return;
+
+    const blob = new Blob([result.mcsData], { type: "application/octet-stream" });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = result.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// --- Import ---
+
 let importTarget = { cardIndex: 0, slotIndex: 0 };
 
 function triggerImport(cardIndex, slotIndex) {
@@ -654,114 +474,36 @@ async function handleImport(input) {
     const buf = await file.arrayBuffer();
     const mcsData = new Uint8Array(buf);
 
-    // Validate .mcs file size (must be multiple of 8320 bytes)
-    const frameSize = 128 + BLOCK_SIZE;
-    if (mcsData.length % frameSize !== 0) {
+    if (!validateMcsSize(mcsData)) {
         await showCustomAlert('Invalid .mcs file: Size matches partial blocks.', "IMPORT ERROR");
         input.value = '';
         return;
     }
 
     const { cardIndex, slotIndex } = importTarget;
-    // Direct call support for drag & drop import
-    await importMcsData(mcsData, cardIndex, slotIndex);
+    await doImportMcs(mcsData, cardIndex, slotIndex);
     input.value = '';
 }
 
-// Refactored Import Logic to be shared
-// Refactored Import Logic to be shared (Supports multi-block)
-async function importMcsData(mcsData, cardIndex, slotIndex) {
+async function doImportMcs(mcsData, cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) {
         await showCustomAlert('No card loaded', "ERROR");
         return;
     }
 
-    const frameSize = 128 + BLOCK_SIZE;
-    const numBlocks = mcsData.length / frameSize;
-
-    if (numBlocks === 0) return;
-
-    // 1. Find free slots
-    // We already have a specific target slot from the user drop (slotIndex).
-    // Is it free?
-    const firstStatus = data[DIR_FRAME_OFFSET + (slotIndex * 128)];
-
-    // We need 'numBlocks' free slots.
-    // If the target slot is empty, we use it as the first one.
-    // Then we need to find (numBlocks - 1) *other* free slots.
-
-    // Check if target slot is actually free (or overwritable?)
-    // The UI says "Import (Overwrite)" on buttons, but checking 0xA0 is safer.
-    // However, if user explicitly clicked a slot, we usually overwrite it.
-    // Let's assume the user WANTS to overwrite starting at 'slotIndex'.
-
-    // But we need (numBlocks - 1) MORE slots.
-    let needed = numBlocks - 1;
-    let allocatedSlots = [slotIndex];
-
-    if (needed > 0) {
-        // Find other free slots, EXCLUDING the one we start at (if it was free)
-        const others = findFreeSlots(cardIndex, 15); // Get all free
-        // Filter out our starting slot from the free list so we don't double count it
-        // (If slotIndex was free, it would be in 'others')
-        const existingFree = others ? others.filter(s => s !== slotIndex) : [];
-
-        if (existingFree.length < needed) {
-            await showCustomAlert(`Need ${numBlocks} free blocks, but only found ${existingFree.length + 1} available (including target).`, "IMPORT ERROR");
-            return;
-        }
-
-        // Take the first 'needed' slots
-        allocatedSlots = allocatedSlots.concat(existingFree.slice(0, needed));
+    const error = importMcsToCard(data, mcsData, slotIndex);
+    if (error) {
+        await showCustomAlert(error, "IMPORT ERROR");
+        return;
     }
 
-    // 2. Import Loop
-    let readOffset = 0;
-
-    for (let i = 0; i < numBlocks; i++) {
-        const destSlot = allocatedSlots[i];
-        const entryOffset = DIR_FRAME_OFFSET + (destSlot * 128);
-        const blockStart = (destSlot + 1) * BLOCK_SIZE;
-
-        // Extract Header & Data from MCS
-        const mcsHeader = mcsData.slice(readOffset, readOffset + 128);
-        const mcsBlock = mcsData.slice(readOffset + 128, readOffset + 128 + BLOCK_SIZE);
-
-        // Write Header to Directory
-        for (let k = 0; k < 128; k++) data[entryOffset + k] = mcsHeader[k];
-
-        // Write Data Block
-        data.set(mcsBlock, blockStart);
-
-        // 3. Relink Pointers
-        // The headers in the MCS file contain OLD link pointers (to where they were on the original card).
-        // We must update them to point to our NEW allocatedSlots.
-
-        if (i < numBlocks - 1) {
-            const nextSlot = allocatedSlots[i + 1];
-            data[entryOffset + 8] = nextSlot & 0xFF;
-            data[entryOffset + 9] = (nextSlot >> 8) & 0xFF; // should be 0
-        } else {
-            // End of chain
-            data[entryOffset + 8] = 0xFF;
-            data[entryOffset + 9] = 0xFF;
-        }
-
-        // 4. Update Checksum (since we modified the link pointers)
-        updateChecksum(data, entryOffset);
-
-        readOffset += frameSize;
-    }
-
-    SoundManager.play('save'); // Play success sound
+    SoundManager.play('save');
     renderSlots(cardIndex);
 }
 
+// --- Format Card ---
 
-// --- Advanced Features ---
-
-// Format card (wipe all saves)
 async function formatCard(cardIndex) {
     if (!cards[cardIndex].data) {
         await showCustomAlert('No card loaded', "ERROR");
@@ -775,53 +517,27 @@ async function formatCard(cardIndex) {
 
     if (!confirmFormat) return;
 
-    const data = cards[cardIndex].data;
-
-    // Reinitialize all 15 directory entries as free
-    for (let i = 0; i < 15; i++) {
-        const entryOffset = DIR_FRAME_OFFSET + (i * 128);
-
-        // Clear directory entry
-        for (let k = 0; k < 128; k++) {
-            data[entryOffset + k] = 0;
-        }
-
-        // Set status to Free
-        data[entryOffset] = 0xA0;
-
-        // Update checksum
-        updateChecksum(data, entryOffset);
-
-        // Optionally clear data block too
-        const blockStart = (i + 1) * BLOCK_SIZE;
-        for (let k = 0; k < BLOCK_SIZE; k++) {
-            data[blockStart + k] = 0;
-        }
-    }
-
-    SoundManager.play('delete'); // Play big delete sound
+    formatCardData(cards[cardIndex].data);
+    SoundManager.play('delete');
     renderSlots(cardIndex);
 }
 
-// Keyboard shortcuts
-let selectedSlot = null; // { cardIndex, slotIndex }
+// --- Keyboard Shortcuts ---
+
+let selectedSlot = null;
 
 document.addEventListener('keydown', e => {
-    // Don't trigger shortcuts when typing in search
     if (e.target.tagName === 'INPUT') return;
 
-    // Delete key - delete selected slot
     if (e.key === 'Delete' && selectedSlot) {
         deleteSave(selectedSlot.cardIndex, selectedSlot.slotIndex);
         selectedSlot = null;
     }
 });
 
-// Click to select slot
 document.addEventListener('click', e => {
     const slotCard = e.target.closest('.slot-card');
     if (slotCard && !slotCard.classList.contains('empty')) {
-        // Deselect previous
         document.querySelectorAll('.slot-card.selected').forEach(s => s.classList.remove('selected'));
         slotCard.classList.add('selected');
         selectedSlot = {
@@ -830,3 +546,20 @@ document.addEventListener('click', e => {
         };
     }
 });
+
+// --- Expose globals for inline onclick handlers ---
+window.toggleTheme = toggleTheme;
+window.toggleHelp = toggleHelp;
+window.handleModalClick = handleModalClick;
+window.closeAlert = closeAlert;
+window.createNewCard = createNewCard;
+window.loadFile = loadFile;
+window.downloadCard = downloadCard;
+window.changeFormat = changeFormat;
+window.formatCard = formatCard;
+window.exportSave = exportSave;
+window.triggerImport = triggerImport;
+window.handleImport = handleImport;
+window.deleteSave = deleteSave;
+window.undeleteSave = undeleteSave;
+window.SoundManager = SoundManager;

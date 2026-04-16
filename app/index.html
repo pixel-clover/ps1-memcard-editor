@@ -41,6 +41,13 @@
                     <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm"
                             onchange="loadFile(this, 0)" type="file"></label>
                     <button class="sm-btn" disabled id="dl-0" onclick="downloadCard(0)">Save</button>
+                    <select class="sm-btn format-select" id="format-0" onchange="changeFormat(0)" title="Output file format">
+                        <option value=".mcr">.mcr</option>
+                        <option value=".bin">.bin</option>
+                        <option value=".gme">.gme</option>
+                        <option value=".mcd">.mcd</option>
+                        <option value=".srm">.srm</option>
+                    </select>
                     <button class="sm-btn btn-danger" onclick="formatCard(0)" title="Format Card">Format</button>
                 </div>
                 <div class="pane-title">MEMORY CARD 1</div>
@@ -57,6 +64,13 @@
                     <label class="sm-btn file-btn">Load <input accept=".mcr,.bin,.gme,.mcd,.srm"
                             onchange="loadFile(this, 1)" type="file"></label>
                     <button class="sm-btn" disabled id="dl-1" onclick="downloadCard(1)">Save</button>
+                    <select class="sm-btn format-select" id="format-1" onchange="changeFormat(1)" title="Output file format">
+                        <option value=".mcr">.mcr</option>
+                        <option value=".bin">.bin</option>
+                        <option value=".gme">.gme</option>
+                        <option value=".mcd">.mcd</option>
+                        <option value=".srm">.srm</option>
+                    </select>
                     <button class="sm-btn btn-danger" onclick="formatCard(1)" title="Format Card">Format</button>
                 </div>
                 <div class="pane-title">MEMORY CARD 2</div>
@@ -80,7 +94,7 @@
             <div class="modal-body">
                 <div class="help-section">
                     <h3>File Support</h3>
-                    <p>Supports .mcr, .bin, .gme, .mcd, .srm memory card files.</p>
+                    <p>Supports .mcr, .bin, .gme, .mcd, .srm memory card files. Use the format dropdown to choose the output file type before saving.</p>
                 </div>
                 <div class="help-section">
                     <h3>Managing Saves</h3>
@@ -99,7 +113,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <p>PS1 Memory Card Editor v0.1.0</p>
+                <p>PS1 Memory Card Editor v0.2.0</p>
             </div>
         </div>
     </div>
@@ -125,7 +139,7 @@
     <!-- Hidden import input -->
     <input accept=".mcs,.psx" class="import-input" id="importInput" onchange="handleImport(this)" type="file">
 
-    <script src="assets/js/app.js"></script>
+    <script type="module" src="assets/js/app.js"></script>
 </body>
 
 </html>

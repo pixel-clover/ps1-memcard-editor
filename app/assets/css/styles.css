@@ -263,6 +263,28 @@ button:active {
     color: var(--accent);
 }
 
+/* Format Dropdown */
+.format-select {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.55rem;
+    padding: 8px 10px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23fff'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+    cursor: pointer;
+}
+
+.format-select option {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 0.55rem;
+    background: #0f2540;
+    color: #fff;
+    padding: 6px;
+}
+
 input[type="file"] {
     display: none;
 }

@@ -166,6 +166,7 @@ async function processFile(file, cardIndex) {
 
     document.getElementById(`status-${cardIndex}`).innerText = file.name;
     document.getElementById(`dl-${cardIndex}`).disabled = false;
+    syncFormatDropdown(cardIndex, file.name);
     renderSlots(cardIndex);
 }
 
@@ -192,6 +193,7 @@ async function createNewCard(cardIndex) {
     SoundManager.play('save'); // Play save sound for creation
     document.getElementById(`status-${cardIndex}`).innerText = "Created New Card";
     document.getElementById(`dl-${cardIndex}`).disabled = false;
+    syncFormatDropdown(cardIndex, cards[cardIndex].name);
     renderSlots(cardIndex);
 }
 
@@ -203,6 +205,33 @@ function downloadCard(cardIndex) {
     a.href = URL.createObjectURL(blob);
     a.download = c.name;
     a.click();
+}
+
+const SUPPORTED_FORMATS = ['.mcr', '.bin', '.gme', '.mcd', '.srm'];
+
+function getFileExtension(filename) {
+    const dot = filename.lastIndexOf('.');
+    return dot !== -1 ? filename.substring(dot).toLowerCase() : '';
+}
+
+function changeFormat(cardIndex) {
+    const select = document.getElementById(`format-${cardIndex}`);
+    const newExt = select.value;
+    const oldName = cards[cardIndex].name;
+    const dot = oldName.lastIndexOf('.');
+    const baseName = dot !== -1 ? oldName.substring(0, dot) : oldName;
+    cards[cardIndex].name = baseName + newExt;
+    document.getElementById(`status-${cardIndex}`).innerText = cards[cardIndex].name;
+}
+
+function syncFormatDropdown(cardIndex, filename) {
+    const ext = getFileExtension(filename);
+    const select = document.getElementById(`format-${cardIndex}`);
+    if (SUPPORTED_FORMATS.includes(ext)) {
+        select.value = ext;
+    } else {
+        select.value = '.mcr';
+    }
 }
 
 // --- Copy Logic ---

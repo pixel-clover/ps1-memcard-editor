@@ -1,5 +1,7 @@
 ## PS1 Memory Card Editor
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/pixel-clover/ps1-memcard-editor/tests.yml?label=tests&style=flat&labelColor=282c34&logo=github)](https://github.com/pixel-clover/ps1-memcard-editor/actions/workflows/tests.yml)
+
 This is a simple web app for editing Sony PlayStation 1 memory card files like `.mcr`, `.gme`, `.mcd`, and `.srm` files.
 
 [![ui_dark_v0.1.0.png](app/assets/images/screenshots/ui_dark_v0.1.0.png)](https://pixel-clover.github.io/ps1-memcard-editor/index.html)

@@ -5,8 +5,14 @@ import {
     updateChecksum, verifyChecksum, parseString, parseShiftJIS,
     getLinkedBlocks, findFreeSlots, slotHasData, countUsedBlocks, getSlotStatus,
     createBlankCard, formatCardData, deleteSaveFromCard, undeleteSaveOnCard,
-    buildMcsExport, validateMcsSize, importMcsToCard, copySaveData
+    buildMcsExport, validateMcsSize, importMcsToCard, copySaveData, readCardFile, buildCardFile
 } from '../app/assets/js/memcard.js';
+
+function makeMcsData(blocks = 1) {
+    const data = new Uint8Array(128 + blocks * BLOCK_SIZE);
+    new DataView(data.buffer).setUint32(4, blocks * BLOCK_SIZE, true);
+    return data;
+}
 
 // --- Test Helpers ---
 
@@ -424,7 +430,7 @@ describe('deleteSaveFromCard', () => {
         expect(getSlotStatus(data, 4)).toBe(0x51);
 
         deleteSaveFromCard(data, 4);
-        expect(getSlotStatus(data, 4)).toBe(0xA0);
+        expect(getSlotStatus(data, 4)).toBe(0xA1);
         expect(verifyChecksum(data, DIR_FRAME_OFFSET + (4 * 128))).toBe(true);
     });
 
@@ -435,9 +441,9 @@ describe('deleteSaveFromCard', () => {
         expect(getSlotStatus(data, 10)).toBe(0x53);
 
         deleteSaveFromCard(data, 2);
-        expect(getSlotStatus(data, 2)).toBe(0xA0);
-        expect(getSlotStatus(data, 6)).toBe(0xA0);
-        expect(getSlotStatus(data, 10)).toBe(0xA0);
+        expect(getSlotStatus(data, 2)).toBe(0xA1);
+        expect(getSlotStatus(data, 6)).toBe(0xA2);
+        expect(getSlotStatus(data, 10)).toBe(0xA3);
     });
 
     it('preserves data blocks for recovery', () => {
@@ -480,7 +486,7 @@ describe('undeleteSaveOnCard', () => {
     it('restores a single-block save to active', () => {
         writeFakeSave(data, 7);
         deleteSaveFromCard(data, 7);
-        expect(getSlotStatus(data, 7)).toBe(0xA0);
+        expect(getSlotStatus(data, 7)).toBe(0xA1);
 
         undeleteSaveOnCard(data, 7);
         expect(getSlotStatus(data, 7)).toBe(0x51);
@@ -567,14 +573,14 @@ describe('MCS export / import round-trip', () => {
 
         expect(result).not.toBeNull();
         expect(result.filename).toBe('SLPS12345_slot1_multi.mcs');
-        expect(result.mcsData.length).toBe(3 * MCS_FRAME_SIZE);
+        expect(result.mcsData.length).toBe(128 + 3 * BLOCK_SIZE);
     });
 
     it('validates correct MCS file size', () => {
-        const valid = new Uint8Array(MCS_FRAME_SIZE);
+        const valid = makeMcsData();
         expect(validateMcsSize(valid)).toBe(true);
 
-        const multi = new Uint8Array(3 * MCS_FRAME_SIZE);
+        const multi = makeMcsData(3);
         expect(validateMcsSize(multi)).toBe(true);
     });
 
@@ -629,12 +635,29 @@ describe('MCS export / import round-trip', () => {
         expect(destCard[lastEntry + 9]).toBe(0xFF);
     });
 
+    it('imports a multi-block save when only the required slots are free', () => {
+        for (let i = 0; i < 12; i++) writeFakeSave(data, i, `GAME${i}`);
+        const mcsData = makeMcsData(3);
+        expect(importMcsToCard(data, mcsData, 12)).toBeNull();
+        expect(getLinkedBlocks(data, 12)).toEqual([12, 13, 14]);
+    });
+
+    it('releases the previous linked blocks when overwriting a save', () => {
+        writeMultiBlockSave(data, [2, 3, 4]);
+        const mcsData = makeMcsData();
+        mcsData[0] = 0x51;
+        expect(importMcsToCard(data, mcsData, 2)).toBeNull();
+        expect(getSlotStatus(data, 2)).toBe(0x51);
+        expect(getSlotStatus(data, 3)).toBe(0xA0);
+        expect(getSlotStatus(data, 4)).toBe(0xA0);
+    });
+
     it('returns error when not enough free slots for import', () => {
         // Fill 14 slots, leaving only 1 free
         for (let i = 0; i < 14; i++) writeFakeSave(data, i, `GAME${i}`);
 
         // Try to import a 3-block save
-        const mcsData = new Uint8Array(3 * MCS_FRAME_SIZE);
+        const mcsData = makeMcsData(3);
         // Write minimal valid headers
         mcsData[0] = 0x51;
         const error = importMcsToCard(data, mcsData, 14);
@@ -768,13 +791,8 @@ describe('Integration: delete + re-allocate + recover', () => {
 describe('Edge cases', () => {
     it('buildMcsExport returns null for empty slot', () => {
         const data = createBlankCard();
-        // Slot 0 is free, but getLinkedBlocks still returns [0]
-        // because it doesn't check status. However, buildMcsExport
-        // operates on whatever the data contains, which is valid behavior.
         const result = buildMcsExport(data, 0);
-        // Should still return data (even if slot is technically free,
-        // the function doesn't check status)
-        expect(result).not.toBeNull();
+        expect(result).toBeNull();
     });
 
     it('handles maximum 15-block save chain', () => {
@@ -807,5 +825,163 @@ describe('Edge cases', () => {
 
         // Source card should be unchanged
         expect(srcCard).toEqual(srcSnapshot);
+    });
+});
+
+describe('Data-loss regressions', () => {
+    it('rejects an MCS truncated by a whole block before overwriting a save', () => {
+        const source = createBlankCard();
+        writeMultiBlockSave(source, [0, 1]);
+        const truncated = buildMcsExport(source, 0).mcsData.slice(0, MCS_FRAME_SIZE);
+        const target = createBlankCard();
+        writeFakeSave(target, 5);
+        const snapshot = target.slice();
+        expect(importMcsToCard(target, truncated, 5)).toBeTypeOf('string');
+        expect(target).toEqual(snapshot);
+    });
+
+    it('writes MCS with one header and consecutive data blocks, and reconstructs directory entries', () => {
+        const source = createBlankCard();
+        writeMultiBlockSave(source, [8, 2, 14]);
+        const { mcsData } = buildMcsExport(source, 8);
+        expect(mcsData.length).toBe(128 + 3 * BLOCK_SIZE);
+        for (const [i, slot] of [8, 2, 14].entries()) {
+            expect(mcsData.slice(128 + i * BLOCK_SIZE, 128 + (i + 1) * BLOCK_SIZE))
+                .toEqual(source.slice((slot + 1) * BLOCK_SIZE, (slot + 2) * BLOCK_SIZE));
+        }
+        // Source allocation state and links must not be reused on the destination.
+        mcsData[0] = 0xA1;
+        mcsData[8] = 14;
+        const target = createBlankCard();
+        expect(importMcsToCard(target, mcsData, 10)).toBeNull();
+        expect(getLinkedBlocks(target, 10)).toEqual([10, 0, 1]);
+        expect([10, 0, 1].map(slot => getSlotStatus(target, slot))).toEqual([0x51, 0x52, 0x53]);
+        expect(target.slice(DIR_FRAME_OFFSET + 10 * 128 + 10, DIR_FRAME_OFFSET + 10 * 128 + 31)).toEqual(mcsData.slice(10, 31));
+        expect(target.slice(128 + 4, 128 + 8)).toEqual(new Uint8Array(4));
+    });
+
+    it('frees every unused old block even when allocation chooses earlier free slots', () => {
+        const data = createBlankCard();
+        writeMultiBlockSave(data, [10, 11, 12]);
+        expect(importMcsToCard(data, makeMcsData(2), 10)).toBeNull();
+        expect(getLinkedBlocks(data, 10)).toEqual([10, 0]);
+        expect(countUsedBlocks(data)).toBe(2);
+        for (const slot of [11, 12]) {
+            expect(getSlotStatus(data, slot)).toBe(0xA0);
+            expect(getLinkedBlocks(data, slot)).toEqual([slot]);
+            expect(verifyChecksum(data, DIR_FRAME_OFFSET + slot * 128)).toBe(true);
+        }
+    });
+
+    it('reuses overwritten blocks on a full card and leaves unrelated saves intact', () => {
+        const data = createBlankCard();
+        for (let i = 0; i < 15; i++) writeFakeSave(data, i);
+        writeMultiBlockSave(data, [10, 11, 12]);
+        const otherSave = data.slice(BLOCK_SIZE, 2 * BLOCK_SIZE);
+        expect(importMcsToCard(data, makeMcsData(3), 10)).toBeNull();
+        expect(getLinkedBlocks(data, 10)).toEqual([10, 11, 12]);
+        expect(data.slice(BLOCK_SIZE, 2 * BLOCK_SIZE)).toEqual(otherSave);
+    });
+
+    it('rejects malformed imports and linked-block targets before any writes', () => {
+        const data = createBlankCard();
+        writeMultiBlockSave(data, [2, 3, 4]);
+        const snapshot = data.slice();
+        for (const bytes of [new Uint8Array(0), new Uint8Array(1000), new Uint8Array(MCS_FRAME_SIZE + 1), new Uint8Array(128 + 16 * BLOCK_SIZE)]) {
+            expect(importMcsToCard(data, bytes, 2)).toBeTypeOf('string');
+        }
+        for (const slot of [3, -1, 15, 1.5, NaN]) {
+            expect(importMcsToCard(data, makeMcsData(), slot)).toBeTypeOf('string');
+        }
+        expect(data).toEqual(snapshot);
+    });
+
+    it('leaves an existing save intact when its replacement will not fit', () => {
+        const data = createBlankCard();
+        for (let i = 0; i < 15; i++) writeFakeSave(data, i);
+        const snapshot = data.slice();
+        expect(importMcsToCard(data, makeMcsData(2), 5)).toContain('free blocks');
+        expect(data).toEqual(snapshot);
+    });
+
+    it('refuses recovery when a deleted block has been reused by another save', () => {
+        const data = createBlankCard();
+        writeMultiBlockSave(data, [2, 5, 8]);
+        deleteSaveFromCard(data, 2);
+        writeFakeSave(data, 5, 'NEWGAME');
+        const snapshot = data.slice();
+        expect(undeleteSaveOnCard(data, 2)).toContain('Cannot recover');
+        expect(undeleteSaveOnCard(data, 8)).toContain('Cannot recover');
+        expect(data).toEqual(snapshot);
+    });
+
+    it('copies into the requested free slot even when earlier slots are available', () => {
+        const source = createBlankCard();
+        const target = createBlankCard();
+        writeMultiBlockSave(source, [2, 3]);
+        expect(copySaveData(source, 2, target, 14)).toBeNull();
+        expect(getLinkedBlocks(target, 14)).toEqual([14, 1]);
+        expect(getSlotStatus(target, 0)).toBe(0xA0);
+    });
+
+    it('refuses to delete, copy, or export a corrupted chain', () => {
+        const data = createBlankCard();
+        writeMultiBlockSave(data, [2, 5, 8]);
+        const offset = DIR_FRAME_OFFSET + 5 * 128;
+        data[offset + 8] = 2; // cycle
+        const snapshot = data.slice();
+        expect(deleteSaveFromCard(data, 2)).toBeTypeOf('string');
+        expect(copySaveData(data, 2, createBlankCard(), 0)).toBeTypeOf('string');
+        expect(buildMcsExport(data, 2)).toBeNull();
+        expect(data).toEqual(snapshot);
+    });
+
+    it('initializes unused links and the broken-sector list correctly', () => {
+        const data = createBlankCard();
+        for (let i = 0; i < 15; i++) expect(getLinkedBlocks(data, i)).toEqual([i]);
+        for (let frame = 16; frame < 36; frame++) {
+            expect(data.slice(frame * 128, frame * 128 + 4)).toEqual(new Uint8Array([255, 255, 255, 255]));
+            expect(verifyChecksum(data, frame * 128)).toBe(true);
+        }
+        expect(data.slice(63 * 128, 64 * 128)).toEqual(data.slice(0, 128));
+        formatCardData(data);
+        for (let i = 0; i < 15; i++) expect(getLinkedBlocks(data, i)).toEqual([i]);
+    });
+});
+
+describe('Card file formats', () => {
+    it('reads and writes all raw formats without changing card bytes', () => {
+        const data = createBlankCard();
+        writeFakeSave(data, 14);
+        for (const extension of SUPPORTED_FORMATS.filter(ext => ext !== '.gme')) {
+            expect(readCardFile(buildCardFile(data, extension)).data).toEqual(data);
+        }
+        expect(readCardFile(data).gmeHeader).toBeNull();
+    });
+
+    it('writes the GME wrapper and preserves descriptions when saving an edited card', () => {
+        const data = createBlankCard();
+        writeFakeSave(data, 14);
+        const bytes = buildCardFile(data, '.gme');
+        expect(bytes.length).toBe(0xF40 + CARD_SIZE);
+        expect(parseString(bytes, 0, 12)).toBe('123-456-STD');
+        expect(bytes.slice(0x10, 0x15)).toEqual(new Uint8Array([0, 0, 1, 0, 1]));
+        bytes[0x40] = 65;
+        const loaded = readCardFile(bytes);
+        expect(loaded.data).toEqual(data);
+        deleteSaveFromCard(loaded.data, 14);
+        const output = buildCardFile(loaded.data, '.gme', loaded.gmeHeader);
+        expect(output[0x40]).toBe(65);
+        expect(output[0x15 + 15]).toBe(0xA1);
+        expect(output.slice(0xF40)).toEqual(loaded.data);
+    });
+
+    it('rejects truncated cards, oversized files, and invalid raw or GME signatures', () => {
+        const data = createBlankCard();
+        const badGme = buildCardFile(data, '.gme');
+        badGme[0] = 0;
+        for (const bytes of [data.slice(0, -1), new Uint8Array(CARD_SIZE), new Uint8Array(CARD_SIZE + 1), badGme]) {
+            expect(() => readCardFile(bytes)).toThrow('Invalid memory card');
+        }
     });
 });

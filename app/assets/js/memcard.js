@@ -6,6 +6,7 @@ export const CARD_SIZE = 131072;
 export const DIR_FRAME_OFFSET = 128;
 export const SUPPORTED_FORMATS = ['.mcr', '.bin', '.gme', '.mcd', '.srm'];
 export const MCS_FRAME_SIZE = 128 + BLOCK_SIZE;
+const GME_HEADER_SIZE = 0xF40;
 
 // --- Utility ---
 
@@ -57,6 +58,7 @@ export function parseShiftJIS(data, offset, length) {
 // --- Card Structure ---
 
 export function getLinkedBlocks(data, startSlot) {
+    if (data.length !== CARD_SIZE || !Number.isInteger(startSlot) || startSlot < 0 || startSlot >= 15) return [];
     const slots = [startSlot];
     let currentSlot = startSlot;
 
@@ -80,7 +82,7 @@ export function findFreeSlots(data, count) {
 
     for (let i = 0; i < 15; i++) {
         const status = data[DIR_FRAME_OFFSET + (i * 128)];
-        if (status === 0xA0) {
+        if (status >= 0xA0 && status <= 0xA3) {
             freeSlots.push(i);
         }
     }
@@ -110,6 +112,39 @@ export function getSlotStatus(data, slotIndex) {
     return data[DIR_FRAME_OFFSET + (slotIndex * 128)];
 }
 
+function isValidSaveChain(data, slots, deleted = false) {
+    return slots.length > 0 && slots.every((slot, i) => {
+        const offset = DIR_FRAME_OFFSET + slot * 128;
+        const status = i === 0 ? 0x51 : i === slots.length - 1 ? 0x53 : 0x52;
+        const next = data[offset + 8] | (data[offset + 9] << 8);
+        return data[offset] === (deleted ? status + 0x50 : status) && next === (slots[i + 1] ?? 0xFFFF);
+    });
+}
+
+// GME wraps the raw card in a DexDrive header; the other supported formats are raw.
+export function readCardFile(bytes) {
+    const isGme = bytes.length === CARD_SIZE + GME_HEADER_SIZE && parseString(bytes, 0, 12) === '123-456-STD';
+    const offset = isGme ? GME_HEADER_SIZE : 0;
+    if (bytes.length !== CARD_SIZE + offset || bytes[offset] !== 0x4D || bytes[offset + 1] !== 0x43) {
+        throw new Error('Invalid memory card size or header.');
+    }
+    return { data: bytes.slice(offset), gmeHeader: isGme ? bytes.slice(0, offset) : null };
+}
+
+export function buildCardFile(data, extension, gmeHeader = null) {
+    if (extension !== '.gme') return data;
+    const bytes = new Uint8Array(GME_HEADER_SIZE + CARD_SIZE);
+    if (gmeHeader) bytes.set(gmeHeader);
+    bytes.set(new TextEncoder().encode('123-456-STD\0'));
+    bytes.set([0, 0, 1, 0, 1], 0x10);
+    for (let i = 0; i < 16; i++) {
+        bytes[0x15 + i] = data[i * 128];
+        bytes[0x25 + i] = data[i * 128 + 8];
+    }
+    bytes.set(data, GME_HEADER_SIZE);
+    return bytes;
+}
+
 // --- Card Operations ---
 
 export function createBlankCard() {
@@ -120,10 +155,17 @@ export function createBlankCard() {
     for (let i = 0; i < 15; i++) {
         const off = DIR_FRAME_OFFSET + (i * 128);
         data[off] = 0xA0;
-        data[off + 4] = 0;
-        data[off + 5] = 0;
+        data[off + 8] = 0xFF;
+        data[off + 9] = 0xFF;
         updateChecksum(data, off);
     }
+    for (let frame = 16; frame < 36; frame++) {
+        const offset = frame * 128;
+        data.fill(0xFF, offset, offset + 4);
+        data[offset + 8] = data[offset + 9] = 0xFF;
+        updateChecksum(data, offset);
+    }
+    data.set(data.slice(0, 128), 63 * 128);
     return data;
 }
 
@@ -136,6 +178,7 @@ export function formatCardData(data) {
         }
 
         data[entryOffset] = 0xA0;
+        data[entryOffset + 8] = data[entryOffset + 9] = 0xFF;
         updateChecksum(data, entryOffset);
 
         const blockStart = (i + 1) * BLOCK_SIZE;
@@ -147,15 +190,18 @@ export function formatCardData(data) {
 
 export function deleteSaveFromCard(data, slotIndex) {
     const linkedSlots = getLinkedBlocks(data, slotIndex);
+    if (!isValidSaveChain(data, linkedSlots)) return 'Invalid save block chain.';
     for (const slot of linkedSlots) {
         const off = DIR_FRAME_OFFSET + (slot * 128);
-        data[off] = 0xA0;
+        data[off] += 0x50;
         updateChecksum(data, off);
     }
+    return null;
 }
 
 export function undeleteSaveOnCard(data, slotIndex) {
     const linkedSlots = getLinkedBlocks(data, slotIndex);
+    if (!isValidSaveChain(data, linkedSlots, true)) return 'Cannot recover this save: its blocks have been reused or its chain is invalid.';
     for (let i = 0; i < linkedSlots.length; i++) {
         const entryOffset = DIR_FRAME_OFFSET + (linkedSlots[i] * 128);
         if (i === 0) {
@@ -167,6 +213,7 @@ export function undeleteSaveOnCard(data, slotIndex) {
         }
         updateChecksum(data, entryOffset);
     }
+    return null;
 }
 
 // --- MCS Export / Import ---
@@ -175,27 +222,18 @@ export function buildMcsExport(data, slotIndex) {
     const linkedSlots = getLinkedBlocks(data, slotIndex);
     const numBlocks = linkedSlots.length;
 
-    if (numBlocks === 0) return null;
+    if (!isValidSaveChain(data, linkedSlots)) return null;
 
-    const mcsSize = numBlocks * MCS_FRAME_SIZE;
+    const mcsSize = 128 + numBlocks * BLOCK_SIZE;
     const mcsData = new Uint8Array(mcsSize);
-
-    let writeOffset = 0;
+    const firstEntryOffset = DIR_FRAME_OFFSET + slotIndex * 128;
+    mcsData.set(data.slice(firstEntryOffset, firstEntryOffset + 128));
 
     for (let i = 0; i < numBlocks; i++) {
         const slot = linkedSlots[i];
-        const entryOffset = DIR_FRAME_OFFSET + (slot * 128);
         const blockStart = (slot + 1) * BLOCK_SIZE;
-
-        for (let k = 0; k < 128; k++) {
-            mcsData[writeOffset + k] = data[entryOffset + k];
-        }
-
-        mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), writeOffset + 128);
-        writeOffset += MCS_FRAME_SIZE;
+        mcsData.set(data.slice(blockStart, blockStart + BLOCK_SIZE), 128 + i * BLOCK_SIZE);
     }
-
-    const firstEntryOffset = DIR_FRAME_OFFSET + (linkedSlots[0] * 128);
     const gameId = parseString(data, firstEntryOffset + 12, 10);
     const filename = `${gameId || 'save'}_slot${slotIndex + 1}${numBlocks > 1 ? '_multi' : ''}.mcs`;
 
@@ -203,7 +241,7 @@ export function buildMcsExport(data, slotIndex) {
 }
 
 export function validateMcsSize(mcsData) {
-    return mcsData.length > 0 && mcsData.length % MCS_FRAME_SIZE === 0;
+    return mcsData.length >= MCS_FRAME_SIZE && mcsData.length <= 128 + 15 * BLOCK_SIZE && (mcsData.length - 128) % BLOCK_SIZE === 0;
 }
 
 /**
@@ -211,34 +249,51 @@ export function validateMcsSize(mcsData) {
  * Returns null on success, or an error message string on failure.
  */
 export function importMcsToCard(data, mcsData, slotIndex) {
-    const numBlocks = mcsData.length / MCS_FRAME_SIZE;
-    if (numBlocks === 0) return 'Empty MCS data';
+    if (!validateMcsSize(mcsData)) return 'Invalid MCS size: expected one 128-byte header followed by 1 to 15 complete blocks.';
+    const declaredSize = new DataView(mcsData.buffer, mcsData.byteOffset + 4, 4).getUint32(0, true);
+    if (declaredSize !== mcsData.length - 128) return 'Invalid MCS data: the header size does not match the save data.';
+    if (data.length !== CARD_SIZE || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= 15) return 'Invalid target slot or card.';
+    const status = getSlotStatus(data, slotIndex);
+    if (status !== 0x51 && !(status >= 0xA0 && status <= 0xA3)) return 'Cannot overwrite a linked block. Choose the first slot of the save.';
+    const numBlocks = (mcsData.length - 128) / BLOCK_SIZE;
 
-    let needed = numBlocks - 1;
-    let allocatedSlots = [slotIndex];
-
-    if (needed > 0) {
-        const others = findFreeSlots(data, 15);
-        const existingFree = others ? others.filter(s => s !== slotIndex) : [];
-
-        if (existingFree.length < needed) {
-            return `Need ${numBlocks} free blocks, but only found ${existingFree.length + 1} available (including target).`;
+    const previousSlots = getSlotStatus(data, slotIndex) === 0x51
+        ? getLinkedBlocks(data, slotIndex)
+        : [];
+    if (status === 0x51 && !isValidSaveChain(data, previousSlots)) return 'Invalid existing save block chain.';
+    const available = [];
+    for (let i = 0; i < 15; i++) {
+        const slotStatus = getSlotStatus(data, i);
+        if (i !== slotIndex && ((slotStatus >= 0xA0 && slotStatus <= 0xA3) || previousSlots.includes(i))) {
+            available.push(i);
         }
-
-        allocatedSlots = allocatedSlots.concat(existingFree.slice(0, needed));
     }
-
-    let readOffset = 0;
+    if (available.length < numBlocks - 1) {
+        return `Need ${numBlocks} free blocks, but only found ${available.length + 1} available (including target).`;
+    }
+    const allocatedSlots = [slotIndex, ...available.slice(0, numBlocks - 1)];
+    for (const oldSlot of previousSlots.filter(slot => !allocatedSlots.includes(slot))) {
+        const offset = DIR_FRAME_OFFSET + oldSlot * 128;
+        data.fill(0, offset, offset + 128);
+        data[offset] = 0xA0;
+        data[offset + 8] = data[offset + 9] = 0xFF;
+        updateChecksum(data, offset);
+    }
 
     for (let i = 0; i < numBlocks; i++) {
         const destSlot = allocatedSlots[i];
         const entryOffset = DIR_FRAME_OFFSET + (destSlot * 128);
         const blockStart = (destSlot + 1) * BLOCK_SIZE;
 
-        const mcsHeader = mcsData.slice(readOffset, readOffset + 128);
-        const mcsBlock = mcsData.slice(readOffset + 128, readOffset + 128 + BLOCK_SIZE);
-
-        for (let k = 0; k < 128; k++) data[entryOffset + k] = mcsHeader[k];
+        const readOffset = 128 + i * BLOCK_SIZE;
+        const mcsBlock = mcsData.slice(readOffset, readOffset + BLOCK_SIZE);
+        data.fill(0, entryOffset, entryOffset + 128);
+        if (i === 0) {
+            data.set(mcsData.slice(10, 31), entryOffset + 10);
+            const size = numBlocks * BLOCK_SIZE;
+            for (let k = 0; k < 4; k++) data[entryOffset + 4 + k] = (size >>> (k * 8)) & 0xFF;
+        }
+        data[entryOffset] = i === 0 ? 0x51 : i === numBlocks - 1 ? 0x53 : 0x52;
         data.set(mcsBlock, blockStart);
 
         if (i < numBlocks - 1) {
@@ -251,7 +306,6 @@ export function importMcsToCard(data, mcsData, slotIndex) {
         }
 
         updateChecksum(data, entryOffset);
-        readOffset += MCS_FRAME_SIZE;
     }
 
     return null;
@@ -265,6 +319,7 @@ export function importMcsToCard(data, mcsData, slotIndex) {
  */
 export function copySaveData(srcData, srcSlotIdx, destData, destSlotIdx) {
     const sourceSlots = getLinkedBlocks(srcData, srcSlotIdx);
+    if (!isValidSaveChain(srcData, sourceSlots)) return 'Invalid source save block chain.';
     const destTargets = findFreeSlots(destData, sourceSlots.length);
 
     if (!destTargets) {
@@ -274,6 +329,8 @@ export function copySaveData(srcData, srcSlotIdx, destData, destSlotIdx) {
     const preferredStartIdx = destTargets.indexOf(destSlotIdx);
     if (preferredStartIdx !== -1) {
         [destTargets[0], destTargets[preferredStartIdx]] = [destTargets[preferredStartIdx], destTargets[0]];
+    } else if (Number.isInteger(destSlotIdx) && destSlotIdx >= 0 && destSlotIdx < 15 && getSlotStatus(destData, destSlotIdx) >= 0xA0 && getSlotStatus(destData, destSlotIdx) <= 0xA3) {
+        destTargets[0] = destSlotIdx;
     }
 
     for (let i = 0; i < sourceSlots.length; i++) {

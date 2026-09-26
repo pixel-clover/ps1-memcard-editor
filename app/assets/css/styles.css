@@ -557,7 +557,6 @@ input[type="file"] {
 
 .drop-overlay.active {
     opacity: 1;
-    pointer-events: all;
 }
 
 .drop-msg {

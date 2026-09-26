@@ -1,22 +1,21 @@
 import {
-    BLOCK_SIZE, CARD_SIZE, DIR_FRAME_OFFSET, SUPPORTED_FORMATS, MCS_FRAME_SIZE,
+    BLOCK_SIZE, DIR_FRAME_OFFSET, SUPPORTED_FORMATS,
     escapeHtml, getFileExtension, changeFileExtension,
-    updateChecksum, parseString, parseShiftJIS,
-    getLinkedBlocks, findFreeSlots, slotHasData, countUsedBlocks,
+    parseString, parseShiftJIS, countUsedBlocks,
     createBlankCard, formatCardData, deleteSaveFromCard, undeleteSaveOnCard,
-    buildMcsExport, validateMcsSize, importMcsToCard, copySaveData
+    buildMcsExport, importMcsToCard, copySaveData, readCardFile, buildCardFile
 } from './memcard.js';
 
 // --- State ---
 const cards = [
-    { data: null, name: "card1.mcr" },
-    { data: null, name: "card2.mcr" }
+    { data: null, name: "card1.mcr", loadRequest: 0 },
+    { data: null, name: "card2.mcr", loadRequest: 0 }
 ];
 let animationFrame = 0;
 
 // --- Initialization ---
 setInterval(() => {
-    animationFrame = (animationFrame + 1) % 3;
+    animationFrame = (animationFrame + 1) % 6;
     renderAllIcons();
 }, 250);
 
@@ -24,12 +23,16 @@ setInterval(() => {
 const dropOverlay = document.getElementById('dropOverlay');
 document.body.addEventListener('dragover', e => {
     e.preventDefault();
-    dropOverlay.classList.add('active');
+    dropOverlay.classList.toggle('active', !draggedSlot && Array.from(e.dataTransfer.types).includes('Files') && !e.target.closest('.slot-card'));
 });
 document.body.addEventListener('dragleave', e => {
-    if (e.target === dropOverlay) dropOverlay.classList.remove('active');
+    if (!e.relatedTarget) dropOverlay.classList.remove('active');
 });
 document.body.addEventListener('drop', handleGlobalDrop);
+document.body.addEventListener('dragend', () => {
+    draggedSlot = null;
+    dropOverlay.classList.remove('active');
+});
 
 // Internal D&D State
 let draggedSlot = null; // { cardIndex, slotIndex }
@@ -40,13 +43,15 @@ function toggleTheme() {
     const current = body.getAttribute('data-theme');
     const newTheme = current === 'light' ? '' : 'light';
     body.setAttribute('data-theme', newTheme);
-    localStorage.setItem('ps1-theme', newTheme);
+    try { localStorage.setItem('ps1-theme', newTheme); } catch (e) { console.warn('Theme persistence unavailable:', e); }
 }
 
 // Restore theme from localStorage
 (function restoreTheme() {
-    const saved = localStorage.getItem('ps1-theme');
-    if (saved) document.body.setAttribute('data-theme', saved);
+    try {
+        const saved = localStorage.getItem('ps1-theme');
+        if (saved) document.body.setAttribute('data-theme', saved);
+    } catch (e) { console.warn('Theme persistence unavailable:', e); }
 })();
 
 // --- Audio System ---
@@ -79,6 +84,7 @@ document.body.addEventListener('click', () => {
 let alertCallback = null;
 
 function showCustomAlert(msg, title = "ALERT") {
+    if (alertCallback) closeAlert(false);
     SoundManager.play('error');
     document.getElementById('alertTitle').innerText = title;
     document.getElementById('alertMessage').innerText = msg;
@@ -91,6 +97,7 @@ function showCustomAlert(msg, title = "ALERT") {
 }
 
 function showCustomConfirm(msg, title = "CONFIRM") {
+    if (alertCallback) closeAlert(false);
     SoundManager.play('click');
     document.getElementById('alertTitle').innerText = title;
     document.getElementById('alertMessage').innerText = msg;
@@ -127,6 +134,7 @@ function handleModalClick(event) {
 
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+        closeAlert(false);
         document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
     }
 });
@@ -141,27 +149,31 @@ async function handleGlobalDrop(e) {
     e.preventDefault();
     dropOverlay.classList.remove('active');
 
-    if (e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+        const file = files[0];
 
         if (file.name.toLowerCase().endsWith('.mcs')) {
             await showCustomAlert("To import a single save (.mcs), drop it directly onto a SLOT, not the background.", "IMPORT ERROR");
             return;
         }
 
-        await processFile(file, 0);
-        if (e.dataTransfer.files.length > 1) await processFile(e.dataTransfer.files[1], 1);
+        await Promise.all(files.slice(0, 2).map((file, cardIndex) => processFile(file, cardIndex)));
     }
 }
 
 async function processFile(file, cardIndex) {
-    const buf = await file.arrayBuffer();
-    if (buf.byteLength < CARD_SIZE) {
-        await showCustomAlert("File too small to be a memory card.", "LOAD ERROR");
+    const card = cards[cardIndex];
+    const request = ++card.loadRequest;
+    try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (request !== card.loadRequest) return;
+        Object.assign(card, readCardFile(bytes));
+    } catch (error) {
+        if (request !== card.loadRequest) return;
+        await showCustomAlert(error.message, 'LOAD ERROR');
         return;
     }
-
-    cards[cardIndex].data = new Uint8Array(buf.slice(0, CARD_SIZE));
     cards[cardIndex].name = file.name;
     SoundManager.play('boot');
 
@@ -177,7 +189,9 @@ async function createNewCard(cardIndex) {
         if (!confirmDiscard) return;
     }
 
+    cards[cardIndex].loadRequest++;
     cards[cardIndex].data = createBlankCard();
+    cards[cardIndex].gmeHeader = null;
     cards[cardIndex].name = `new_card_${cardIndex + 1}.mcr`;
     SoundManager.play('save');
     document.getElementById(`status-${cardIndex}`).innerText = "Created New Card";
@@ -189,7 +203,7 @@ async function createNewCard(cardIndex) {
 function downloadCard(cardIndex) {
     const c = cards[cardIndex];
     if (!c.data) return;
-    const blob = new Blob([c.data], { type: "application/octet-stream" });
+    const blob = new Blob([buildCardFile(c.data, getFileExtension(c.name), c.gmeHeader)], { type: "application/octet-stream" });
     const a = document.createElement('a');
     const url = URL.createObjectURL(blob);
     a.href = url;
@@ -216,7 +230,7 @@ function syncFormatDropdown(cardIndex, filename) {
 
 function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
     if (srcCardIdx === destCardIdx && srcSlotIdx === destSlotIdx) return;
-    if (!cards[srcCardIdx].data || !cards[destCardIdx].data) return;
+    if (!cards[srcCardIdx]?.data || !cards[destCardIdx]?.data) return;
 
     const error = copySaveData(cards[srcCardIdx].data, srcSlotIdx, cards[destCardIdx].data, destSlotIdx);
     if (error) {
@@ -225,6 +239,7 @@ function copySave(srcCardIdx, srcSlotIdx, destCardIdx, destSlotIdx) {
     }
 
     renderSlots(destCardIdx);
+    SoundManager.play('save');
 }
 
 // --- Drag & Drop Save Logic ---
@@ -236,6 +251,8 @@ function handleDragStart(e, cardIdx, slotIdx) {
 
 async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
     e.preventDefault();
+    e.stopPropagation();
+    dropOverlay.classList.remove('active');
 
     if (e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
@@ -244,9 +261,7 @@ async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
             return;
         }
 
-        const buf = await file.arrayBuffer();
-        const mcsData = new Uint8Array(buf);
-        await doImportMcs(mcsData, destCardIdx, destSlotIdx);
+        await doImportMcs(file, destCardIdx, destSlotIdx);
         return;
     }
 
@@ -259,15 +274,15 @@ async function handleSlotDrop(e, destCardIdx, destSlotIdx) {
         } catch (err) { console.warn('D&D parse error', err); }
     }
 
-    if (!src) return;
+    if (!src || !Number.isInteger(src.cardIndex) || src.cardIndex < 0 || src.cardIndex >= cards.length || !Number.isInteger(src.slotIndex) || src.slotIndex < 0 || src.slotIndex >= 15) return;
 
     copySave(src.cardIndex, src.slotIndex, destCardIdx, destSlotIdx);
     draggedSlot = null;
-    SoundManager.play('save');
 }
 
 // --- Rendering ---
 function renderSlots(cardIndex) {
+    if (selectedSlot?.cardIndex === cardIndex) selectedSlot = null;
     const container = document.getElementById(`grid-${cardIndex}`);
     container.innerHTML = '';
     const data = cards[cardIndex].data;
@@ -303,7 +318,7 @@ function renderSlots(cardIndex) {
         });
         card.addEventListener('drop', e => {
             card.style.borderColor = "var(--border)";
-            handleSlotDrop(e, cardIndex, i);
+            return handleSlotDrop(e, cardIndex, i);
         });
 
         if (status === 0x51) { // Active
@@ -341,9 +356,9 @@ function renderSlots(cardIndex) {
                 </button>
             </div>
         `;
-        } else if (status === 0xA0) { // Empty
+        } else if (status >= 0xA0 && status <= 0xA3) { // Empty or deleted
             card.classList.add('empty');
-            const hasData = slotHasData(data, i);
+            const hasData = status === 0xA1;
             card.innerHTML = `
             <div style="width:48px;height:48px;background:rgba(0,0,0,0.3);border-radius:4px;border:2px solid var(--border);"></div>
             <div class="slot-info">
@@ -425,10 +440,16 @@ function drawIcon(data, slotIndex, canvas) {
 // --- Save Operations ---
 
 async function deleteSave(cardIndex, slotIndex) {
-    const confirmDelete = await showCustomConfirm("Permanently Delete Save?", "DELETE SAVE");
+    const data = cards[cardIndex].data;
+    if (!data) return;
+    const confirmDelete = await showCustomConfirm("Delete Save?", "DELETE SAVE");
     if (!confirmDelete) return;
-
-    deleteSaveFromCard(cards[cardIndex].data, slotIndex);
+    if (cards[cardIndex].data !== data) return;
+    const error = deleteSaveFromCard(data, slotIndex);
+    if (error) {
+        await showCustomAlert(error, 'DELETE ERROR');
+        return;
+    }
     SoundManager.play('delete');
     renderSlots(cardIndex);
 }
@@ -437,7 +458,11 @@ function undeleteSave(cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) return;
 
-    undeleteSaveOnCard(data, slotIndex);
+    const error = undeleteSaveOnCard(data, slotIndex);
+    if (error) {
+        showCustomAlert(error, 'RECOVERY ERROR');
+        return;
+    }
     SoundManager.play('save');
     renderSlots(cardIndex);
 }
@@ -469,29 +494,30 @@ function triggerImport(cardIndex, slotIndex) {
 
 async function handleImport(input) {
     if (!input.files.length) return;
-
-    const file = input.files[0];
-    const buf = await file.arrayBuffer();
-    const mcsData = new Uint8Array(buf);
-
-    if (!validateMcsSize(mcsData)) {
-        await showCustomAlert('Invalid .mcs file: Size matches partial blocks.', "IMPORT ERROR");
-        input.value = '';
-        return;
-    }
-
     const { cardIndex, slotIndex } = importTarget;
-    await doImportMcs(mcsData, cardIndex, slotIndex);
+    const file = input.files[0];
+    await doImportMcs(file, cardIndex, slotIndex);
     input.value = '';
 }
 
-async function doImportMcs(mcsData, cardIndex, slotIndex) {
+async function doImportMcs(file, cardIndex, slotIndex) {
     const data = cards[cardIndex].data;
     if (!data) {
         await showCustomAlert('No card loaded', "ERROR");
         return;
     }
 
+    let mcsData;
+    try {
+        mcsData = new Uint8Array(await file.arrayBuffer());
+    } catch (error) {
+        await showCustomAlert(error.message, 'IMPORT ERROR');
+        return;
+    }
+    if (cards[cardIndex].data !== data) {
+        await showCustomAlert('The target card changed while reading the save. Please import again.', 'IMPORT ERROR');
+        return;
+    }
     const error = importMcsToCard(data, mcsData, slotIndex);
     if (error) {
         await showCustomAlert(error, "IMPORT ERROR");
@@ -505,7 +531,8 @@ async function doImportMcs(mcsData, cardIndex, slotIndex) {
 // --- Format Card ---
 
 async function formatCard(cardIndex) {
-    if (!cards[cardIndex].data) {
+    const data = cards[cardIndex].data;
+    if (!data) {
         await showCustomAlert('No card loaded', "ERROR");
         return;
     }
@@ -516,8 +543,8 @@ async function formatCard(cardIndex) {
     );
 
     if (!confirmFormat) return;
-
-    formatCardData(cards[cardIndex].data);
+    if (cards[cardIndex].data !== data) return;
+    formatCardData(data);
     SoundManager.play('delete');
     renderSlots(cardIndex);
 }
@@ -527,7 +554,7 @@ async function formatCard(cardIndex) {
 let selectedSlot = null;
 
 document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT') return;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) || document.querySelector('.modal-overlay.active')) return;
 
     if (e.key === 'Delete' && selectedSlot) {
         deleteSave(selectedSlot.cardIndex, selectedSlot.slotIndex);

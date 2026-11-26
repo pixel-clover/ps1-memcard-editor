@@ -79,7 +79,8 @@ beforeEach(async () => {
     vi.stubGlobal('window', {});
     vi.stubGlobal('localStorage', { getItem: () => null, setItem: vi.fn() });
     vi.stubGlobal('setInterval', fn => { tick = fn; return 1; });
-    vi.stubGlobal('URL', { createObjectURL: blob => { downloads.push(blob); return 'blob:test'; }, revokeObjectURL: vi.fn() });
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => { downloads.push(blob); return 'blob:test'; });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     await import('../app/assets/js/app.js');
 });
 

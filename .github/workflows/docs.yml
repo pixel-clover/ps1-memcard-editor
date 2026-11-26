@@ -23,24 +23,24 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
         with:
           lfs: true
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Setup pages
+        uses: actions/configure-pages@v6
 
-      - name: Copy App Files
+      - name: Copy app files
         run: |
           mkdir ./site
           cp -a ./app/. ./site/
 
-      - name: Upload App
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload app
+        uses: actions/upload-pages-artifact@v5
         with:
           path: './site'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -1,9 +1,9 @@
 [project]
 name = "ps1-memcard-editor"
 version = "0.1.0"
-description = "The Python environment for the `PlayStation 1 memory card editor` project"
+description = "The Python environment for the PlayStation one memory card editor project"
 
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.15,<4.0"
 dependencies = [
     "pre-commit>=4.2.0",
     "icecream>=2.1.4",
